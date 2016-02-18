@@ -8,7 +8,6 @@
 #include <limits.h>
 
 #include <dev_tree.h>
-#include <libfdt.h>
 
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
 #define ROUNDDOWN(a, b) ((a) & ~((b)-1))
@@ -66,7 +65,7 @@ int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *
 	return 0;
 }
 
-int dev_tree_generate(const char* filename, struct dt_table *table) {
+int dev_tree_generate(const char* directory, struct dt_table *table) {
 	uint32_t i;
     int rc;
 	unsigned char *table_ptr = NULL;
@@ -74,30 +73,15 @@ int dev_tree_generate(const char* filename, struct dt_table *table) {
 	struct dt_entry_v1 *dt_entry_v1 = NULL;
 	struct dt_entry_v2 *dt_entry_v2 = NULL;
     struct dt_entry *cur_dt_entry = NULL;
-    struct dt_entry_v1 new_dt_entry_v1;
-    struct dt_entry_v2 new_dt_entry_v2;
-    struct dt_entry    new_dt_entry_v3;
-    uint8_t fdt[4096];
 
     table_ptr = (unsigned char *)table + DEV_TREE_HEADER_SIZE;
 	cur_dt_entry = &dt_entry_buf_1;
-
-    int fd = open(filename, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if(fd<0) {
-        fprintf(stderr, "Can't open file %s\n", filename);
-        return fd;
-    }
-
-    // seek past header
-    //lseek(fd, sizeof(struct dt_table), SEEK_SET);
-    write(fd, table, sizeof(*table));
 
 	fprintf(stdout, "DTB Total entry: %d, DTB version: %d\n", table->num_entries, table->version);
 	for(i = 0; i < table->num_entries; i++) {
         switch(table->version) {
 		case DEV_TREE_VERSION_V1:
 			dt_entry_v1 = (struct dt_entry_v1 *)table_ptr;
-            memcpy(&new_dt_entry_v1, dt_entry_v1, sizeof(new_dt_entry_v1));
 			cur_dt_entry->platform_id = dt_entry_v1->platform_id;
 			cur_dt_entry->variant_id = dt_entry_v1->variant_id;
 			cur_dt_entry->soc_rev = dt_entry_v1->soc_rev;
@@ -112,7 +96,6 @@ int dev_tree_generate(const char* filename, struct dt_table *table) {
 			break;
 		case DEV_TREE_VERSION_V2:
 			dt_entry_v2 = (struct dt_entry_v2*)table_ptr;
-            memcpy(&new_dt_entry_v2, dt_entry_v2, sizeof(new_dt_entry_v2));
 			cur_dt_entry->platform_id = dt_entry_v2->platform_id;
 			cur_dt_entry->variant_id = dt_entry_v2->variant_id;
 			cur_dt_entry->soc_rev = dt_entry_v2->soc_rev;
@@ -141,7 +124,6 @@ int dev_tree_generate(const char* filename, struct dt_table *table) {
 		case DEV_TREE_VERSION_V3:
 			memcpy(cur_dt_entry, (struct dt_entry *)table_ptr,
 				   sizeof(struct dt_entry));
-            memcpy(&new_dt_entry_v3, table_ptr, sizeof(new_dt_entry_v3));
 			/* For V3 version of DTBs we have platform version field as part
 			 * of variant ID, in such case the subtype will be mentioned as 0x0
 			 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
@@ -168,53 +150,37 @@ int dev_tree_generate(const char* filename, struct dt_table *table) {
 					cur_dt_entry->variant_id,
 					cur_dt_entry->soc_rev);
 
-        // create empty fdt
-        rc = fdt_create_empty_tree(fdt, sizeof(fdt));
-        if(rc) {
-			fprintf(stderr, "Can't create empty FDT: %s\n", fdt_strerror(rc));
+        // build filename
+        char filename[PATH_MAX];
+        rc = snprintf(filename, sizeof(filename), "%s/%u.dts", directory, i);
+        if(rc<0 || (size_t)rc>=sizeof(filename)) {
+            fprintf(stderr, "Can't build filename\n");
+            return rc;
+        }
+
+        // open file
+        FILE* f = fopen(filename, "w+");
+        if(!f) {
+            fprintf(stderr, "Can't open file %s\n", filename);
             return -1;
         }
 
-	    // get root node
-	    rc = fdt_path_offset(fdt, "/");
-        if(rc) {
-			fprintf(stderr, "Can't get root node: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-	    uint32_t offset = rc;
+        fprintf(f, "/dts-v1/;\n\n/ {\n");
 
-        uint32_t msm_id[3];
-        uint32_t board_id[2];
+        // common
+        fprintf(f, "\t#address-cells = <0x1>;\n");
+        fprintf(f, "\t#size-cells = <0x1>;\n");
+        fprintf(f, "\tmodel = \"EFIDroid\";\n");
+
+        // msm-id
         switch(table->version) {
 		    case DEV_TREE_VERSION_V1:
                 // set msm-id
-                msm_id[0] = cpu_to_fdt32(cur_dt_entry->platform_id);
-                msm_id[1] = cpu_to_fdt32(cur_dt_entry->variant_id);
-                msm_id[2] = cpu_to_fdt32(cur_dt_entry->soc_rev);
-                rc = fdt_setprop(fdt, offset, "qcom,msm-id", &msm_id, sizeof(*msm_id)*3);
-                if(rc) {
-			        fprintf(stderr, "Can't set qcom,msm-id: %s\n", fdt_strerror(rc));
-                    return -1;
-                }
+                fprintf(f, "\tqcom,msm-id = <0x%x 0x%x 0x%x>;\n", cur_dt_entry->platform_id, cur_dt_entry->variant_id, cur_dt_entry->soc_rev);
                 break;
 		    case DEV_TREE_VERSION_V2:
-                // set msm-id
-                msm_id[0] = cpu_to_fdt32(cur_dt_entry->platform_id);
-                msm_id[1] = cpu_to_fdt32(cur_dt_entry->soc_rev);
-                rc = fdt_setprop(fdt, offset, "qcom,msm-id", &msm_id, sizeof(*msm_id)*2);
-                if(rc) {
-			        fprintf(stderr, "Can't set qcom,msm-id: %s\n", fdt_strerror(rc));
-                    return -1;
-                }
-
-                // set board-id
-                board_id[0] = cpu_to_fdt32(cur_dt_entry->variant_id);
-                board_id[1] = cpu_to_fdt32(cur_dt_entry->board_hw_subtype);
-                rc = fdt_setprop(fdt, offset, "qcom,board-id", &board_id, sizeof(*board_id)*2);
-                if(rc) {
-			        fprintf(stderr, "Can't set qcom,msm-id: %s\n", fdt_strerror(rc));
-                    return -1;
-                }
+                fprintf(f, "\tqcom,msm-id = <0x%x 0x%x>;\n", cur_dt_entry->platform_id, cur_dt_entry->soc_rev);
+                fprintf(f, "\tqcom,board-id = <0x%x 0x%x>;\n", cur_dt_entry->variant_id, cur_dt_entry->board_hw_subtype);
                 break;
 
 		    default:
@@ -223,113 +189,25 @@ int dev_tree_generate(const char* filename, struct dt_table *table) {
 			    return -1;
         }
 
-        // set model
-        rc = fdt_setprop_string(fdt, offset, "model", "EFIDroid");
-        if(rc) {
-			fprintf(stderr, "Can't set model: %s\n", fdt_strerror(rc));
+        // memory
+        fprintf(f, "\n\tmemory {\n");
+        fprintf(f, "\t\t#address-cells = <0x1>;\n");
+        fprintf(f, "\t\t#size-cells = <0x1>;\n");
+        fprintf(f, "\t\tdevice_type = \"memory\";\n");
+        fprintf(f, "\t\treg = <0x0 0x0 0x0 0x0>;\n");
+        fprintf(f, "\t};\n\n");
+
+        // chosen
+        fprintf(f, "\tchosen {\n\t};\n");
+
+        fprintf(f, "};\n");
+
+        // close file
+        if(fclose(f)) {
+            fprintf(stderr, "Can't close file %s\n", filename);
             return -1;
         }
-
-        // set size cells
-        rc = fdt_setprop_u32(fdt, offset, "#size-cells", 0x1);
-        if(rc) {
-			fprintf(stderr, "Can't set size_cells: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // set addr cells
-        rc = fdt_setprop_u32(fdt, offset, "#address-cells", 0x1);
-        if(rc) {
-			fprintf(stderr, "Can't set addr_cells: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // add chosen subnode
-        rc = fdt_add_subnode(fdt, offset, "chosen");
-        if(rc<0) {
-			fprintf(stderr, "Can't create chosen node: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // add memory subnode
-        rc = fdt_add_subnode(fdt, offset, "memory");
-        if(rc<0) {
-			fprintf(stderr, "Can't create chosen node: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-        offset = rc;
-
-        uint32_t reg[4];
-        rc = fdt_setprop(fdt, offset, "reg", &reg, sizeof(*reg)*4);
-        if(rc) {
-	        fprintf(stderr, "Can't set qcom,msm-id: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // set device_type
-        rc = fdt_setprop_string(fdt, offset, "device_type", "memory");
-        if(rc) {
-			fprintf(stderr, "Can't set device_type: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // set size cells
-        rc = fdt_setprop_u32(fdt, offset, "#size-cells", 0x1);
-        if(rc) {
-			fprintf(stderr, "Can't set size_cells: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // set addr cells
-        rc = fdt_setprop_u32(fdt, offset, "#address-cells", 0x1);
-        if(rc) {
-			fprintf(stderr, "Can't set addr_cells: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // pack fdt
-        rc = fdt_pack(fdt);
-        if(rc) {
-			fprintf(stderr, "Can't pack FDT: %s\n", fdt_strerror(rc));
-            return -1;
-        }
-
-        // get fdt size
-        uint32_t fdt_size = fdt_totalsize(fdt);
-
-        // get current fd position
-        off_t cur_pos = fdpos(fd);
-        if(cur_pos<0) {
-			fprintf(stderr, "Can't get position of file: %s\n", filename);
-            return (int)cur_pos;
-        }
-
-        // write dt entry
-        switch(table->version) {
-		case DEV_TREE_VERSION_V1:
-            new_dt_entry_v1.offset = cur_pos + sizeof(new_dt_entry_v1);
-            new_dt_entry_v1.size = fdt_size;
-            write(fd, &new_dt_entry_v1, sizeof(new_dt_entry_v1));
-			break;
-		case DEV_TREE_VERSION_V2:
-            new_dt_entry_v2.offset = cur_pos + sizeof(new_dt_entry_v2);
-            new_dt_entry_v2.size = fdt_size;
-            write(fd, &new_dt_entry_v2, sizeof(new_dt_entry_v2));
-			break;
-		case DEV_TREE_VERSION_V3:
-            new_dt_entry_v3.offset = cur_pos + sizeof(new_dt_entry_v3);
-            new_dt_entry_v3.size = fdt_size;
-            write(fd, &new_dt_entry_v3, sizeof(new_dt_entry_v3));
-			break;
-		default:
-			fprintf(stderr, "ERROR: Unsupported version (%d) in DT table \n",
-					table->version);
-			return -1;
-		}
-
-        // write fdt
-    	write(fd, fdt, fdt_size);
-	}    
+	}
 
     return 0;
 }
@@ -342,7 +220,7 @@ int main(int argc, char** argv) {
 
     // validate arguments
     if(argc!=3) {
-        fprintf(stderr, "Usage: %s dt.img newdt.img\n", argv[0]);
+        fprintf(stderr, "Usage: %s dt.img outdir\n", argv[0]);
         return -EINVAL;
     }
 

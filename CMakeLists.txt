@@ -11,4 +11,8 @@ include_directories(
 add_executable(dtbconvert
     src/main.c
 )
-target_link_libraries(dtbconvert fdt)
+
+# dtbtool
+add_executable(dtbtool
+    src/dtbtool.c
+)
