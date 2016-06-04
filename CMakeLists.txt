@@ -8,7 +8,7 @@ include_directories(
 )
 
 # main
-add_executable(dtbconvert
+add_executable(qcdt2efidroiddts
     src/main.c
 )
 
