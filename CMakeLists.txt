@@ -16,3 +16,8 @@ add_executable(qcdt2efidroiddts
 add_executable(dtbtool
     src/dtbtool.c
 )
+
+# qcdtextract
+add_executable(qcdtextract
+    src/qcdtextract.c
+)
