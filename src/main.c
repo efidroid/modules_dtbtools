@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,7 +94,7 @@ int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *
 	return 0;
 }
 
-int dev_tree_generate(const char* directory, struct dt_table *table) {
+int dev_tree_generate(const char* directory, const char* directory_decomp, struct dt_table *table) {
 	uint32_t i;
     int rc;
 	unsigned char *table_ptr = NULL;
@@ -193,28 +194,35 @@ int dev_tree_generate(const char* directory, struct dt_table *table) {
             return -1;
         }
 
+        // build filename2
+        char filename2[PATH_MAX];
+        rc = snprintf(filename2, sizeof(filename2), "%s/%u.dts", directory_decomp, i);
+        if(rc<0 || (size_t)rc>=sizeof(filename2)) {
+            fprintf(stderr, "Can't build filename\n");
+            return rc;
+        }
+
+        // open file
+        FILE* forig = fopen(filename2, "r");
+        if(!f) {
+            fprintf(stderr, "Can't open file %s\n", filename);
+            return -1;
+        }
+
         fprintf(f, "/dts-v1/;\n\n/ {\n");
 
-        // common
-        fprintf(f, "\t#address-cells = <0x1>;\n");
-        fprintf(f, "\t#size-cells = <0x1>;\n");
-        fprintf(f, "\tmodel = \"EFIDroid\";\n");
+        // add simple root nodes
+        char line[4096];
+        while (fgets(line, sizeof(line), forig)) {
+            size_t len = strlen(line);
 
-        // msm-id
-        switch(table->version) {
-		    case DEV_TREE_VERSION_V1:
-                // set msm-id
-                fprintf(f, "\tqcom,msm-id = <0x%x 0x%x 0x%x>;\n", cur_dt_entry->platform_id, cur_dt_entry->variant_id, cur_dt_entry->soc_rev);
-                break;
-		    case DEV_TREE_VERSION_V2:
-                fprintf(f, "\tqcom,msm-id = <0x%x 0x%x>;\n", cur_dt_entry->platform_id, cur_dt_entry->soc_rev);
-                fprintf(f, "\tqcom,board-id = <0x%x 0x%x>;\n", cur_dt_entry->variant_id, cur_dt_entry->board_hw_subtype);
-                break;
+            if(len<5) continue;
+            if(line[len-1]=='\n') line[(len--)-1] = 0;
+            if(line[0]!='\t') continue;
+            if(isspace(line[1])) continue;
+            if(line[len-1]!=';') continue;
 
-		    default:
-			    fprintf(stderr, "Unsupported version (%d) in DT table \n",
-					    table->version);
-			    return -1;
+            fprintf(f, "%s\n", line);
         }
 
         // memory
@@ -230,8 +238,12 @@ int dev_tree_generate(const char* directory, struct dt_table *table) {
 
         fprintf(f, "};\n");
 
-        // close file
+        // close files
         if(fclose(f)) {
+            fprintf(stderr, "Can't close file %s\n", filename);
+            return -1;
+        }
+        if(fclose(forig)) {
             fprintf(stderr, "Can't close file %s\n", filename);
             return -1;
         }
@@ -247,8 +259,8 @@ int main(int argc, char** argv) {
     ssize_t ssize;
 
     // validate arguments
-    if(argc!=3) {
-        fprintf(stderr, "Usage: %s dt.img outdir\n", argv[0]);
+    if(argc!=4) {
+        fprintf(stderr, "Usage: %s dt.img outdir origdecompdir\n", argv[0]);
         return -EINVAL;
     }
 
@@ -294,7 +306,7 @@ int main(int argc, char** argv) {
 
     // generate devtree
     struct dt_table* table = dtimg;
-    rc = dev_tree_generate(argv[2], table);
+    rc = dev_tree_generate(argv[2], argv[3], table);
     if (rc) {
         fprintf(stderr, "Cannot process table\n");
         goto free_buffer;
