@@ -35,7 +35,33 @@
 #include <stdint.h>
 #include <limits.h>
 
+#include <list.h>
 #include <dev_tree.h>
+
+typedef struct {
+    list_node_t node;
+    uint32_t offset;
+} dt_offset_t;
+
+static void log_offset(list_node_t* list, uint32_t offset) {
+    dt_offset_t* dtoff = malloc(sizeof(dt_offset_t));
+    if(!dtoff) return;
+
+    dtoff->offset = offset;
+    list_add_tail(list, &dtoff->node);
+}
+
+static int has_offset(list_node_t* list, uint32_t offset) {
+	dt_offset_t *entry;
+
+	list_for_every_entry(list, entry, dt_offset_t, node) {
+		if (entry->offset==offset) {
+			return 1;
+		}
+	}
+
+    return 0;
+}
 
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
 #define ROUNDDOWN(a, b) ((a) & ~((b)-1))
@@ -97,7 +123,9 @@ int dev_tree_extract(const char* directory, struct dt_table *table) {
 	struct dt_entry_v1 *dt_entry_v1 = NULL;
 	struct dt_entry_v2 *dt_entry_v2 = NULL;
     struct dt_entry *cur_dt_entry = NULL;
+    list_node_t offlist;
 
+    list_initialize(&offlist);
     table_ptr = (unsigned char *)table + DEV_TREE_HEADER_SIZE;
 	cur_dt_entry = &dt_entry_buf_1;
 
@@ -169,10 +197,16 @@ int dev_tree_extract(const char* directory, struct dt_table *table) {
 			return -1;
 		}
 
-        fprintf(stdout, "entry: <%u %u 0x%x>\n",
+        fprintf(stdout, "[%u] entry: <%u %u 0x%x> off=0x%08x\n", i,
 					cur_dt_entry->platform_id,
 					cur_dt_entry->variant_id,
-					cur_dt_entry->soc_rev);
+					cur_dt_entry->soc_rev,
+                    cur_dt_entry->offset);
+
+        if(has_offset(&offlist, cur_dt_entry->offset)) {
+            fprintf(stdout, "SKIP\n");
+            continue;
+        }
 
         // build filename
         char filename[PATH_MAX];
@@ -197,6 +231,13 @@ int dev_tree_extract(const char* directory, struct dt_table *table) {
             fprintf(stderr, "Can't close file %s\n", filename);
             return -1;
         }
+
+        log_offset(&offlist, cur_dt_entry->offset);
+	}
+
+	while(list_is_empty(&offlist)) {
+		dt_offset_t* entry = list_remove_tail_type(&offlist, dt_offset_t, node);
+		free(entry);
 	}
 
     return 0;
