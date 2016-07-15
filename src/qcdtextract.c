@@ -135,6 +135,7 @@ int dev_tree_extract(const char* directory, struct dt_table *table)
 
     fprintf(stdout, "DTB Total entry: %d, DTB version: %d\n", table->num_entries, table->version);
     for (i = 0; i < table->num_entries; i++) {
+        memset(cur_dt_entry, 0, sizeof(*cur_dt_entry));
         switch (table->version) {
             case DEV_TREE_VERSION_V1:
                 dt_entry_v1 = (struct dt_entry_v1 *)table_ptr;
@@ -201,14 +202,14 @@ int dev_tree_extract(const char* directory, struct dt_table *table)
                 return -1;
         }
 
-        fprintf(stdout, "[%u] entry: <%u %u 0x%x> off=0x%08x\n", i,
-                cur_dt_entry->platform_id,
-                cur_dt_entry->variant_id,
-                cur_dt_entry->soc_rev,
-                cur_dt_entry->offset);
 
-        if (has_offset(&offlist, cur_dt_entry->offset)) {
-            fprintf(stdout, "SKIP\n");
+        int skip = has_offset(&offlist, cur_dt_entry->offset);
+        fprintf(stdout, "%s chipset: %u, rev: %u, platform: %u, subtype: %u, pmic0: %u, pmic1: %u, pmic2: %u, pmic3: %u\n",
+                skip ? "[SKIP] " : "[WRITE]",
+                cur_dt_entry->platform_id, cur_dt_entry->soc_rev, cur_dt_entry->variant_id, cur_dt_entry->board_hw_subtype,
+                cur_dt_entry->pmic_rev[0], cur_dt_entry->pmic_rev[1], cur_dt_entry->pmic_rev[2], cur_dt_entry->pmic_rev[3]);
+
+        if (skip) {
             continue;
         }
 
