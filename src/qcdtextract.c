@@ -43,22 +43,24 @@ typedef struct {
     uint32_t offset;
 } dt_offset_t;
 
-static void log_offset(list_node_t* list, uint32_t offset) {
+static void log_offset(list_node_t* list, uint32_t offset)
+{
     dt_offset_t* dtoff = malloc(sizeof(dt_offset_t));
-    if(!dtoff) return;
+    if (!dtoff) return;
 
     dtoff->offset = offset;
     list_add_tail(list, &dtoff->node);
 }
 
-static int has_offset(list_node_t* list, uint32_t offset) {
-	dt_offset_t *entry;
+static int has_offset(list_node_t* list, uint32_t offset)
+{
+    dt_offset_t *entry;
 
-	list_for_every_entry(list, entry, dt_offset_t, node) {
-		if (entry->offset==offset) {
-			return 1;
-		}
-	}
+    list_for_every_entry(list, entry, dt_offset_t, node) {
+        if (entry->offset==offset) {
+            return 1;
+        }
+    }
 
     return 0;
 }
@@ -69,7 +71,8 @@ static int has_offset(list_node_t* list, uint32_t offset) {
 #define PAGE_SIZE_DEF  2048
 static int m_page_size = PAGE_SIZE_DEF;
 
-off_t fdsize(int fd) {
+off_t fdsize(int fd)
+{
     off_t off;
 
     off = lseek(fd, 0L, SEEK_END);
@@ -81,129 +84,130 @@ off_t fdsize(int fd) {
 /* Returns 0 if the device tree is valid. */
 int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *dt_hdr_size)
 {
-	int dt_entry_size;
-	uint64_t hdr_size;
+    int dt_entry_size;
+    uint64_t hdr_size;
 
-	/* Validate the device tree table header */
-	if(table->magic != DEV_TREE_MAGIC) {
-		fprintf(stderr, "Bad magic in device tree table \n");
-		return -1;
-	}
+    /* Validate the device tree table header */
+    if (table->magic != DEV_TREE_MAGIC) {
+        fprintf(stderr, "Bad magic in device tree table \n");
+        return -1;
+    }
 
-	if (table->version == DEV_TREE_VERSION_V1) {
-		dt_entry_size = sizeof(struct dt_entry_v1);
-	} else if (table->version == DEV_TREE_VERSION_V2) {
-		dt_entry_size = sizeof(struct dt_entry_v2);
-	} else if (table->version == DEV_TREE_VERSION_V3) {
-		dt_entry_size = sizeof(struct dt_entry);
-	} else {
-		fprintf(stderr, "Unsupported version (%d) in DT table \n",
-				table->version);
-		return -1;
-	}
+    if (table->version == DEV_TREE_VERSION_V1) {
+        dt_entry_size = sizeof(struct dt_entry_v1);
+    } else if (table->version == DEV_TREE_VERSION_V2) {
+        dt_entry_size = sizeof(struct dt_entry_v2);
+    } else if (table->version == DEV_TREE_VERSION_V3) {
+        dt_entry_size = sizeof(struct dt_entry);
+    } else {
+        fprintf(stderr, "Unsupported version (%d) in DT table \n",
+                table->version);
+        return -1;
+    }
 
-	hdr_size = (uint64_t)table->num_entries * dt_entry_size + DEV_TREE_HEADER_SIZE;
+    hdr_size = (uint64_t)table->num_entries * dt_entry_size + DEV_TREE_HEADER_SIZE;
 
-	/* Roundup to page_size. */
-	hdr_size = ROUNDUP(hdr_size, page_size);
+    /* Roundup to page_size. */
+    hdr_size = ROUNDUP(hdr_size, page_size);
 
-	if (hdr_size > UINT_MAX)
-		return -1;
-	else
-		*dt_hdr_size = hdr_size & UINT_MAX;
+    if (hdr_size > UINT_MAX)
+        return -1;
+    else
+        *dt_hdr_size = hdr_size & UINT_MAX;
 
-	return 0;
+    return 0;
 }
 
-int dev_tree_extract(const char* directory, struct dt_table *table) {
-	uint32_t i;
+int dev_tree_extract(const char* directory, struct dt_table *table)
+{
+    uint32_t i;
     int rc;
-	unsigned char *table_ptr = NULL;
+    unsigned char *table_ptr = NULL;
     struct dt_entry dt_entry_buf_1;
-	struct dt_entry_v1 *dt_entry_v1 = NULL;
-	struct dt_entry_v2 *dt_entry_v2 = NULL;
+    struct dt_entry_v1 *dt_entry_v1 = NULL;
+    struct dt_entry_v2 *dt_entry_v2 = NULL;
     struct dt_entry *cur_dt_entry = NULL;
     list_node_t offlist;
 
     list_initialize(&offlist);
     table_ptr = (unsigned char *)table + DEV_TREE_HEADER_SIZE;
-	cur_dt_entry = &dt_entry_buf_1;
+    cur_dt_entry = &dt_entry_buf_1;
 
-	fprintf(stdout, "DTB Total entry: %d, DTB version: %d\n", table->num_entries, table->version);
-	for(i = 0; i < table->num_entries; i++) {
-        switch(table->version) {
-		case DEV_TREE_VERSION_V1:
-			dt_entry_v1 = (struct dt_entry_v1 *)table_ptr;
-			cur_dt_entry->platform_id = dt_entry_v1->platform_id;
-			cur_dt_entry->variant_id = dt_entry_v1->variant_id;
-			cur_dt_entry->soc_rev = dt_entry_v1->soc_rev;
-			cur_dt_entry->board_hw_subtype = (dt_entry_v1->variant_id >> 0x18);
-			/*cur_dt_entry->pmic_rev[0] = board_pmic_target(0);
-			cur_dt_entry->pmic_rev[1] = board_pmic_target(1);
-			cur_dt_entry->pmic_rev[2] = board_pmic_target(2);
-			cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
-			cur_dt_entry->offset = dt_entry_v1->offset;
-			cur_dt_entry->size = dt_entry_v1->size;
-			table_ptr += sizeof(struct dt_entry_v1);
-			break;
-		case DEV_TREE_VERSION_V2:
-			dt_entry_v2 = (struct dt_entry_v2*)table_ptr;
-			cur_dt_entry->platform_id = dt_entry_v2->platform_id;
-			cur_dt_entry->variant_id = dt_entry_v2->variant_id;
-			cur_dt_entry->soc_rev = dt_entry_v2->soc_rev;
-			/* For V2 version of DTBs we have platform version field as part
-			 * of variant ID, in such case the subtype will be mentioned as 0x0
-			 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
-			 * SS -- Subtype
-			 * PM -- Platform major version
-			 * Pm -- Platform minor version
-			 * PH -- Platform hardware CDP/MTP
-			 * In such case to make it compatible with LK algorithm move the subtype
-			 * from variant_id to subtype field
-			 */
-			if (dt_entry_v2->board_hw_subtype == 0)
-				cur_dt_entry->board_hw_subtype = (cur_dt_entry->variant_id >> 0x18);
-			else
-				cur_dt_entry->board_hw_subtype = dt_entry_v2->board_hw_subtype;
-			/*cur_dt_entry->pmic_rev[0] = board_pmic_target(0);
-			cur_dt_entry->pmic_rev[1] = board_pmic_target(1);
-			cur_dt_entry->pmic_rev[2] = board_pmic_target(2);
-			cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
-			cur_dt_entry->offset = dt_entry_v2->offset;
-			cur_dt_entry->size = dt_entry_v2->size;
-			table_ptr += sizeof(struct dt_entry_v2);
-			break;
-		case DEV_TREE_VERSION_V3:
-			memcpy(cur_dt_entry, (struct dt_entry *)table_ptr,
-				   sizeof(struct dt_entry));
-			/* For V3 version of DTBs we have platform version field as part
-			 * of variant ID, in such case the subtype will be mentioned as 0x0
-			 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
-			 * SS -- Subtype
-			 * PM -- Platform major version
-			 * Pm -- Platform minor version
-			 * PH -- Platform hardware CDP/MTP
-			 * In such case to make it compatible with LK algorithm move the subtype
-			 * from variant_id to subtype field
-			 */
-			if (cur_dt_entry->board_hw_subtype == 0)
-				cur_dt_entry->board_hw_subtype = (cur_dt_entry->variant_id >> 0x18);
+    fprintf(stdout, "DTB Total entry: %d, DTB version: %d\n", table->num_entries, table->version);
+    for (i = 0; i < table->num_entries; i++) {
+        switch (table->version) {
+            case DEV_TREE_VERSION_V1:
+                dt_entry_v1 = (struct dt_entry_v1 *)table_ptr;
+                cur_dt_entry->platform_id = dt_entry_v1->platform_id;
+                cur_dt_entry->variant_id = dt_entry_v1->variant_id;
+                cur_dt_entry->soc_rev = dt_entry_v1->soc_rev;
+                cur_dt_entry->board_hw_subtype = (dt_entry_v1->variant_id >> 0x18);
+                /*cur_dt_entry->pmic_rev[0] = board_pmic_target(0);
+                cur_dt_entry->pmic_rev[1] = board_pmic_target(1);
+                cur_dt_entry->pmic_rev[2] = board_pmic_target(2);
+                cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
+                cur_dt_entry->offset = dt_entry_v1->offset;
+                cur_dt_entry->size = dt_entry_v1->size;
+                table_ptr += sizeof(struct dt_entry_v1);
+                break;
+            case DEV_TREE_VERSION_V2:
+                dt_entry_v2 = (struct dt_entry_v2*)table_ptr;
+                cur_dt_entry->platform_id = dt_entry_v2->platform_id;
+                cur_dt_entry->variant_id = dt_entry_v2->variant_id;
+                cur_dt_entry->soc_rev = dt_entry_v2->soc_rev;
+                /* For V2 version of DTBs we have platform version field as part
+                 * of variant ID, in such case the subtype will be mentioned as 0x0
+                 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
+                 * SS -- Subtype
+                 * PM -- Platform major version
+                 * Pm -- Platform minor version
+                 * PH -- Platform hardware CDP/MTP
+                 * In such case to make it compatible with LK algorithm move the subtype
+                 * from variant_id to subtype field
+                 */
+                if (dt_entry_v2->board_hw_subtype == 0)
+                    cur_dt_entry->board_hw_subtype = (cur_dt_entry->variant_id >> 0x18);
+                else
+                    cur_dt_entry->board_hw_subtype = dt_entry_v2->board_hw_subtype;
+                /*cur_dt_entry->pmic_rev[0] = board_pmic_target(0);
+                cur_dt_entry->pmic_rev[1] = board_pmic_target(1);
+                cur_dt_entry->pmic_rev[2] = board_pmic_target(2);
+                cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
+                cur_dt_entry->offset = dt_entry_v2->offset;
+                cur_dt_entry->size = dt_entry_v2->size;
+                table_ptr += sizeof(struct dt_entry_v2);
+                break;
+            case DEV_TREE_VERSION_V3:
+                memcpy(cur_dt_entry, (struct dt_entry *)table_ptr,
+                       sizeof(struct dt_entry));
+                /* For V3 version of DTBs we have platform version field as part
+                 * of variant ID, in such case the subtype will be mentioned as 0x0
+                 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
+                 * SS -- Subtype
+                 * PM -- Platform major version
+                 * Pm -- Platform minor version
+                 * PH -- Platform hardware CDP/MTP
+                 * In such case to make it compatible with LK algorithm move the subtype
+                 * from variant_id to subtype field
+                 */
+                if (cur_dt_entry->board_hw_subtype == 0)
+                    cur_dt_entry->board_hw_subtype = (cur_dt_entry->variant_id >> 0x18);
 
-			table_ptr += sizeof(struct dt_entry);
-			break;
-		default:
-			fprintf(stderr, "ERROR: Unsupported version (%d) in DT table \n",
-					table->version);
-			return -1;
-		}
+                table_ptr += sizeof(struct dt_entry);
+                break;
+            default:
+                fprintf(stderr, "ERROR: Unsupported version (%d) in DT table \n",
+                        table->version);
+                return -1;
+        }
 
         fprintf(stdout, "[%u] entry: <%u %u 0x%x> off=0x%08x\n", i,
-					cur_dt_entry->platform_id,
-					cur_dt_entry->variant_id,
-					cur_dt_entry->soc_rev,
-                    cur_dt_entry->offset);
+                cur_dt_entry->platform_id,
+                cur_dt_entry->variant_id,
+                cur_dt_entry->soc_rev,
+                cur_dt_entry->offset);
 
-        if(has_offset(&offlist, cur_dt_entry->offset)) {
+        if (has_offset(&offlist, cur_dt_entry->offset)) {
             fprintf(stdout, "SKIP\n");
             continue;
         }
@@ -211,14 +215,14 @@ int dev_tree_extract(const char* directory, struct dt_table *table) {
         // build filename
         char filename[PATH_MAX];
         rc = snprintf(filename, sizeof(filename), "%s/%u.dtb", directory, i);
-        if(rc<0 || (size_t)rc>=sizeof(filename)) {
+        if (rc<0 || (size_t)rc>=sizeof(filename)) {
             fprintf(stderr, "Can't build filename\n");
             return rc;
         }
 
         // open file
         FILE* f = fopen(filename, "wb+");
-        if(!f) {
+        if (!f) {
             fprintf(stderr, "Can't open file %s\n", filename);
             return -1;
         }
@@ -227,30 +231,31 @@ int dev_tree_extract(const char* directory, struct dt_table *table) {
         fwrite(((char*)table) + cur_dt_entry->offset, cur_dt_entry->size, 1, f);
 
         // close file
-        if(fclose(f)) {
+        if (fclose(f)) {
             fprintf(stderr, "Can't close file %s\n", filename);
             return -1;
         }
 
         log_offset(&offlist, cur_dt_entry->offset);
-	}
+    }
 
-	while(list_is_empty(&offlist)) {
-		dt_offset_t* entry = list_remove_tail_type(&offlist, dt_offset_t, node);
-		free(entry);
-	}
+    while (list_is_empty(&offlist)) {
+        dt_offset_t* entry = list_remove_tail_type(&offlist, dt_offset_t, node);
+        free(entry);
+    }
 
     return 0;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     int rc;
     off_t off;
     void* dtimg = NULL;
     ssize_t ssize;
 
     // validate arguments
-    if(argc!=3) {
+    if (argc!=3) {
         fprintf(stderr, "Usage: %s dt.img outdir\n", argv[0]);
         return -EINVAL;
     }
@@ -258,14 +263,14 @@ int main(int argc, char** argv) {
     // open file
     const char* filename = argv[1];
     int fd = open(filename, O_RDONLY);
-    if(fd<0) {
+    if (fd<0) {
         fprintf(stderr, "Can't open file %s\n", filename);
         return fd;
     }
 
     // get filesize
     off = fdsize(fd);
-    if(off<0) {
+    if (off<0) {
         fprintf(stderr, "Can't get size of file %s\n", filename);
         rc = (int)off;
         goto close_file;
@@ -273,7 +278,7 @@ int main(int argc, char** argv) {
 
     // allocate buffer
     dtimg = malloc(off);
-    if(!dtimg) {
+    if (!dtimg) {
         fprintf(stderr, "Can't allocate buffer of size %lu\n", off);
         rc = -ENOMEM;
         goto close_file;
@@ -281,7 +286,7 @@ int main(int argc, char** argv) {
 
     // read file into memory
     ssize = read(fd, dtimg, off);
-    if(ssize!=off) {
+    if (ssize!=off) {
         fprintf(stderr, "Can't read file %s into buffer\n", filename);
         rc = (int)ssize;
         goto free_buffer;
@@ -308,12 +313,12 @@ free_buffer:
 
 close_file:
     // close file
-    if(close(fd)) {
+    if (close(fd)) {
         fprintf(stderr, "Can't close file %s\n", filename);
         return rc;
     }
 
-    if(rc) {
+    if (rc) {
         fprintf(stderr, "ERROR: %s\n", strerror(-rc));
         return rc;
     }

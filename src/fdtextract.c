@@ -39,7 +39,8 @@
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
 #define ROUNDDOWN(a, b) ((a) & ~((b)-1))
 
-off_t fdsize(int fd) {
+off_t fdsize(int fd)
+{
     off_t off;
 
     off = lseek(fd, 0L, SEEK_END);
@@ -48,14 +49,15 @@ off_t fdsize(int fd) {
     return off;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     int rc;
     off_t off;
     void* fdtimg = NULL;
     ssize_t ssize;
 
     // validate arguments
-    if(argc!=3) {
+    if (argc!=3) {
         fprintf(stderr, "Usage: %s fdt.img outdir\n", argv[0]);
         return -EINVAL;
     }
@@ -63,14 +65,14 @@ int main(int argc, char** argv) {
     // open file
     const char* filename = argv[1];
     int fd = open(filename, O_RDONLY);
-    if(fd<0) {
+    if (fd<0) {
         fprintf(stderr, "Can't open file %s\n", filename);
         return fd;
     }
 
     // get filesize
     off = fdsize(fd);
-    if(off<0) {
+    if (off<0) {
         fprintf(stderr, "Can't get size of file %s\n", filename);
         rc = (int)off;
         goto close_file;
@@ -78,7 +80,7 @@ int main(int argc, char** argv) {
 
     // allocate buffer
     fdtimg = malloc(off);
-    if(!fdtimg) {
+    if (!fdtimg) {
         fprintf(stderr, "Can't allocate buffer of size %lu\n", off);
         rc = -ENOMEM;
         goto close_file;
@@ -86,7 +88,7 @@ int main(int argc, char** argv) {
 
     // read file into memory
     ssize = read(fd, fdtimg, off);
-    if(ssize!=off) {
+    if (ssize!=off) {
         fprintf(stderr, "Can't read file %s into buffer\n", filename);
         rc = (int)ssize;
         goto free_buffer;
@@ -94,14 +96,14 @@ int main(int argc, char** argv) {
 
     void* fdt = fdtimg;
     uint32_t i = 0;
-    while(fdt+sizeof(struct fdt_header) < fdt+off) {
-        if(fdt_check_header(fdt)) break;
+    while (fdt+sizeof(struct fdt_header) < fdt+off) {
+        if (fdt_check_header(fdt)) break;
         uint32_t fdtsize = fdt_totalsize(fdt);
 
         // build filename
         char fdtfilename[PATH_MAX];
         rc = snprintf(fdtfilename, sizeof(fdtfilename), "%s/%u.dtb", argv[2], i++);
-        if(rc<0 || (size_t)rc>=sizeof(fdtfilename)) {
+        if (rc<0 || (size_t)rc>=sizeof(fdtfilename)) {
             fprintf(stderr, "Can't build filename\n");
             return rc;
         }
@@ -111,7 +113,7 @@ int main(int argc, char** argv) {
 
         // open file
         FILE* f = fopen(fdtfilename, "wb+");
-        if(!f) {
+        if (!f) {
             fprintf(stderr, "Can't open file %s\n", fdtfilename);
             return -1;
         }
@@ -120,7 +122,7 @@ int main(int argc, char** argv) {
         fwrite(fdt, fdtsize, 1, f);
 
         // close file
-        if(fclose(f)) {
+        if (fclose(f)) {
             fprintf(stderr, "Can't close file %s\n", fdtfilename);
             return -1;
         }
@@ -134,12 +136,12 @@ free_buffer:
 
 close_file:
     // close file
-    if(close(fd)) {
+    if (close(fd)) {
         fprintf(stderr, "Can't close file %s\n", filename);
         return rc;
     }
 
-    if(rc) {
+    if (rc) {
         fprintf(stderr, "ERROR: %s\n", strerror(-rc));
         return rc;
     }
