@@ -21,3 +21,9 @@ add_executable(dtbtool
 add_executable(qcdtextract
     src/qcdtextract.c
 )
+
+# fdtextract
+add_executable(fdtextract
+    src/fdtextract.c
+)
+target_link_libraries(fdtextract fdt)
