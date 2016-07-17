@@ -7,11 +7,6 @@ include_directories(
     include
 )
 
-# main
-add_executable(qcdt2efidroiddts
-    src/main.c
-)
-
 # dtbtool
 add_executable(dtbtool
     src/dtbtool.c
