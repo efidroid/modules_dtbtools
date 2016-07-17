@@ -27,3 +27,9 @@ add_executable(fdtextract
     src/fdtextract.c
 )
 target_link_libraries(fdtextract fdt)
+
+# dtbefidroidify
+add_executable(dtbefidroidify
+    src/dtbefidroidify.c
+)
+target_link_libraries(dtbefidroidify fdt)
