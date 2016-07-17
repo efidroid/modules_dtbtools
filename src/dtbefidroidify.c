@@ -101,6 +101,7 @@ struct chipPt_t {
 typedef struct chipPt_t chippt_t;
 
 typedef struct {
+    uint32_t version;
     uint32_t chipset;
     uint32_t platform;
     uint32_t subtype;
@@ -705,6 +706,7 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
 
         // create efidroid socinfo
         efidroid_fdtinfo_t fdtinfo = {
+            .version = cpu_to_fdt32(version),
             .chipset = cpu_to_fdt32(t_chip->chipset),
             .platform = cpu_to_fdt32(t_chip->platform),
             .subtype = cpu_to_fdt32(t_chip->subtype),
