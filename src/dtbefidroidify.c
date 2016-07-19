@@ -41,6 +41,8 @@
 
 #include <list.h>
 
+#define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
+
 typedef struct {
     list_node_t node;
 
@@ -641,7 +643,8 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
         goto close_file;
     }
 
-    size_t bufsz = off;
+    // align the size
+    size_t bufsz = ROUNDUP(off, sizeof(uint32_t));
 
     // allocate buffer
     fdt = malloc(bufsz);
@@ -881,6 +884,13 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
 
         // pack fdt
         fdt_pack(fdtcopy);
+
+        // align fdt size
+        rc = fdt_open_into(fdtcopy, fdtcopy, ROUNDUP(fdt_totalsize(fdtcopy), sizeof(uint32_t)));
+        if (rc<0) {
+            fprintf(stderr, "can't align fdt size %s\n", fdt_strerror(rc));
+            goto next_chip;
+        }
 
         // write new fdt
         ssize_t fdtsz = fdt_totalsize(fdtcopy);
