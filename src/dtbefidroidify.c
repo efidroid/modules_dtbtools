@@ -937,7 +937,7 @@ close_file:
 
 int main(int argc, char** argv)
 {
-    uint32_t i;
+    uint32_t i = 0;
     int rc = 0;
     struct dirent *dp;
     char* filename = NULL;
