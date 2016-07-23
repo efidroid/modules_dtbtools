@@ -256,6 +256,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
 
     int offset_root = fdt_path_offset(fdt, "/");
     if (offset_root<0) {
+        fprintf(stderr, "root offset not found\n");
         return NULL;
     }
 
@@ -263,8 +264,10 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
     prop_board = fdt_get_property(fdt, offset_root, "qcom,board-id", &len_board);
     prop_pmic = fdt_get_property(fdt, offset_root, "qcom,pmic-id", &len_pmic);
 
-    if (!prop_msm)
+    if (!prop_msm) {
+        fprintf(stderr, "msm prop not found\n");
         return NULL;
+    }
 
     if (version==1) {
         uint32_t* msmarr = (uint32_t*)prop_msm->data;
@@ -343,6 +346,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
         }
 
         else {
+            fprintf(stderr, "unknown msm-id format for V1 dtb\n");
             return NULL;
         }
 
@@ -350,11 +354,16 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
     }
 
     else if (version==2 || version==3) {
-        if (!prop_board)
+        if (!prop_board) {
+            fprintf(stderr, "board prop not found\n");
             return NULL;
-        if (version==3 && !prop_pmic)
+        }
+        if (version==3 && !prop_pmic) {
+            fprintf(stderr, "pmic prop not found\n");
             return NULL;
+        }
         if (len_msm%(sizeof(uint32_t)*2)) {
+            fprintf(stderr, "msm prop has invalid length\n");
             return NULL;
         }
 
@@ -387,7 +396,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
             uint32_t platform = fdt32_to_cpu(boardarr[i+0]);
             uint32_t subtype = fdt32_to_cpu(boardarr[i+1]);
 
-            chipst_t* tmp_st = malloc(sizeof(chipst));
+            chipst_t* tmp_st = malloc(sizeof(chipst_t));
             if (!tmp_st) {
                 rc = -ENOMEM;
                 goto cleanup;
@@ -414,7 +423,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
                 uint32_t pmic2 = fdt32_to_cpu(pmicarr[i+2]);
                 uint32_t pmic3 = fdt32_to_cpu(pmicarr[i+3]);
 
-                chippt_t* tmp_pt = malloc(sizeof(chippt));
+                chippt_t* tmp_pt = malloc(sizeof(chippt_t));
                 if (!tmp_pt) {
                     rc = -ENOMEM;
                     goto cleanup;
@@ -679,6 +688,11 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
 
     // get chipinfo
     chipinfo_t* chip = fdt_get_qc_chipinfo(fdt, version);
+    if(!chip) {
+        fprintf(stderr, "can't get chipinfo\n");
+        rc = -ENOMEM;
+        goto next_chip;
+    }
 
     // allocate fdcopy
     fdtcopy = malloc(bufsz);
