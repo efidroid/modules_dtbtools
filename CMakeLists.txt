@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project(dtbconvert)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -Wshadow")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -Wshadow -O0 -ggdb")
 
 include_directories(
     include
@@ -28,3 +28,9 @@ add_executable(dtbefidroidify
     src/dtbefidroidify.c
 )
 target_link_libraries(dtbefidroidify fdt)
+
+# smemparse
+add_executable(smemparse
+    src/smemparse.c
+)
+
