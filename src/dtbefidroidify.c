@@ -41,6 +41,7 @@
 
 #include <list.h>
 
+#define DTB_PAD_SIZE  1024
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
 
 typedef struct {
@@ -624,7 +625,7 @@ int callback_fn(void *fdt, const char *path, void *fdtcopy)
     return 0;
 }
 
-int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp)
+int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int remove_unused_nodes)
 {
     int rc;
     off_t off;
@@ -652,11 +653,8 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp)
         goto close_file;
     }
 
-    // align the size
-    size_t bufsz = ROUNDUP(off, sizeof(uint32_t));
-
     // allocate buffer
-    fdt = malloc(bufsz);
+    fdt = malloc(off);
     if (!fdt) {
         fprintf(stderr, "Can't allocate buffer of size %lu\n", off);
         rc = -ENOMEM;
@@ -695,7 +693,8 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp)
     }
 
     // allocate fdcopy
-    fdtcopy = malloc(bufsz);
+    size_t fdtcopysz = ROUNDUP(off + DTB_PAD_SIZE, sizeof(uint32_t));
+    fdtcopy = malloc(fdtcopysz);
     if (!fdtcopy) {
         fprintf(stderr, "can't allocate fdtcopy\n");
         rc = -ENOMEM;
@@ -703,14 +702,16 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp)
     }
 
     // copy fdt
-    rc = fdt_open_into(fdt, fdtcopy, bufsz);
+    rc = fdt_open_into(fdt, fdtcopy, fdtcopysz);
     if (rc<0) {
         fprintf(stderr, "can't copy fdt %s\n", fdt_strerror(rc));
         goto next_chip;
     }
 
     // remove unneeded nodes
-    list_subnodes_callback(fdt, "/", callback_fn, fdtcopy);
+    if (remove_unused_nodes) {
+        list_subnodes_callback(fdt, "/", callback_fn, fdtcopy);
+    }
 
     // write new dtb's
     chipinfo_t *t_chip;
@@ -957,12 +958,13 @@ int main(int argc, char **argv)
     char *filename = NULL;
 
     // validate arguments
-    if (argc!=3) {
-        fprintf(stderr, "Usage: %s in.dtb outdir\n", argv[0]);
+    if (argc!=4) {
+        fprintf(stderr, "Usage: %s in.dtb outdir remove_unused_nodes\n", argv[0]);
         return -EINVAL;
     }
     const char *indir = argv[1];
     const char *outdir = argv[2];
+    int remove_unused_nodes = !strcmp(argv[3], "1");
 
     // check directory
     if (!is_directory(outdir)) {
@@ -972,7 +974,7 @@ int main(int argc, char **argv)
 
     // check directory
     if (!is_directory(indir)) {
-        return process_dtb(indir, outdir, &i);
+        return process_dtb(indir, outdir, &i, remove_unused_nodes);
     }
 
     DIR *dir = opendir(indir);
@@ -1012,7 +1014,7 @@ int main(int argc, char **argv)
                 strncat(filename, "/", 1);
                 strncat(filename, dp->d_name, flen);
 
-                rc = process_dtb(filename, outdir, &i);
+                rc = process_dtb(filename, outdir, &i, remove_unused_nodes);
                 if (rc) break;
 
                 free(filename);
