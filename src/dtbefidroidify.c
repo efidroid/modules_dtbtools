@@ -46,15 +46,15 @@
 typedef struct {
     list_node_t node;
 
-    char* name;
-    void* data;
+    char *name;
+    void *data;
     size_t size;
 } fdtprop_t;
 
 typedef struct {
     list_node_t node;
 
-    char* name;
+    char *name;
 } fdtnode_t;
 
 struct chipInfo_t {
@@ -130,14 +130,14 @@ int is_directory(const char *path)
 }
 
 #define MAX_LEVEL   32      /* how deeply nested we will go */
-int list_subnodes_callback(void* blob, const char* parentpath, int (*callback)(void* fdt, const char* path, void* pdata), void* pdata)
+int list_subnodes_callback(void *blob, const char *parentpath, int (*callback)(void *fdt, const char *path, void *pdata), void *pdata)
 {
     int nextoffset;     /* next node offset from libfdt */
     uint32_t tag;       /* current tag */
     int level = 0;      /* keep track of nesting level */
     const char *pathp;
     int depth = 1;      /* the assumed depth of this node */
-    const char* newpath = NULL;
+    const char *newpath = NULL;
 
     // get offset
     int node = fdt_path_offset(blob, parentpath);
@@ -177,7 +177,7 @@ int list_subnodes_callback(void* blob, const char* parentpath, int (*callback)(v
                 if (newpath && level==1) {
                     // allocate name
                     size_t nodepath_len = strlen(parentpath)+1+strlen(newpath)+1;
-                    char* nodepath = malloc(nodepath_len);
+                    char *nodepath = malloc(nodepath_len);
                     if (!nodepath) return 1;
 
                     // build name
@@ -216,7 +216,7 @@ int list_subnodes_callback(void* blob, const char* parentpath, int (*callback)(v
     return 0;
 }
 
-int fdt_get_qc_version(void* fdt)
+int fdt_get_qc_version(void *fdt)
 {
     int len;
     int version = 1;
@@ -238,20 +238,20 @@ int fdt_get_qc_version(void* fdt)
     return version;
 }
 
-chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
+chipinfo_t *fdt_get_qc_chipinfo(void *fdt, int version)
 {
     int rc = 0;
     uint32_t i;
     int len_msm;
     int len_board;
     int len_pmic;
-    const struct fdt_property* prop_msm;
-    const struct fdt_property* prop_board;
-    const struct fdt_property* prop_pmic;
-    chipinfo_t* chip = NULL;
-    chipid_t* chipid = NULL;
-    chipst_t* chipst = NULL;
-    chippt_t* chippt = NULL;
+    const struct fdt_property *prop_msm;
+    const struct fdt_property *prop_board;
+    const struct fdt_property *prop_pmic;
+    chipinfo_t *chip = NULL;
+    chipid_t *chipid = NULL;
+    chipst_t *chipst = NULL;
+    chippt_t *chippt = NULL;
     uint32_t count1 = 0, count2 = 0, count3 = 0;
 
     int offset_root = fdt_path_offset(fdt, "/");
@@ -270,7 +270,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
     }
 
     if (version==1) {
-        uint32_t* msmarr = (uint32_t*)prop_msm->data;
+        uint32_t *msmarr = (uint32_t *)prop_msm->data;
 
         if (len_msm%(sizeof(uint32_t)*3) == 0) {
             for (i=0; i<len_msm/sizeof(uint32_t); i+=3) {
@@ -278,7 +278,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
                 uint32_t platform = fdt32_to_cpu(msmarr[i+1]);
                 uint32_t revNum = fdt32_to_cpu(msmarr[i+2]);
 
-                chipinfo_t* tmp = malloc(sizeof(chipinfo_t));
+                chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
                 if (!tmp) {
                     rc = -ENOMEM;
                     goto cleanup;
@@ -315,7 +315,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
                 uint32_t revNum = fdt32_to_cpu(msmarr[i+2]);
                 uint32_t lgeRev = fdt32_to_cpu(msmarr[i+3]);
 
-                chipinfo_t* tmp = malloc(sizeof(chipinfo_t));
+                chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
                 if (!tmp) {
                     rc = -ENOMEM;
                     goto cleanup;
@@ -367,12 +367,12 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
             return NULL;
         }
 
-        uint32_t* msmarr = (uint32_t*)prop_msm->data;
+        uint32_t *msmarr = (uint32_t *)prop_msm->data;
         for (i=0; i<len_msm/sizeof(uint32_t); i+=2) {
             uint32_t chipset = fdt32_to_cpu(msmarr[i+0]);
             uint32_t revNum = fdt32_to_cpu(msmarr[i+1]);
 
-            chipid_t* tmp_id = malloc(sizeof(chipid_t));
+            chipid_t *tmp_id = malloc(sizeof(chipid_t));
             if (!tmp_id) {
                 rc = -ENOMEM;
                 goto cleanup;
@@ -391,12 +391,12 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
             count1++;
         }
 
-        uint32_t* boardarr = (uint32_t*)prop_board->data;
+        uint32_t *boardarr = (uint32_t *)prop_board->data;
         for (i=0; i<len_board/sizeof(uint32_t); i+=2) {
             uint32_t platform = fdt32_to_cpu(boardarr[i+0]);
             uint32_t subtype = fdt32_to_cpu(boardarr[i+1]);
 
-            chipst_t* tmp_st = malloc(sizeof(chipst_t));
+            chipst_t *tmp_st = malloc(sizeof(chipst_t));
             if (!tmp_st) {
                 rc = -ENOMEM;
                 goto cleanup;
@@ -416,14 +416,14 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
         }
 
         if (prop_pmic) {
-            uint32_t* pmicarr = (uint32_t*)prop_pmic->data;
+            uint32_t *pmicarr = (uint32_t *)prop_pmic->data;
             for (i=0; i<len_pmic/sizeof(uint32_t); i+=4) {
                 uint32_t pmic0 = fdt32_to_cpu(pmicarr[i+0]);
                 uint32_t pmic1 = fdt32_to_cpu(pmicarr[i+1]);
                 uint32_t pmic2 = fdt32_to_cpu(pmicarr[i+2]);
                 uint32_t pmic3 = fdt32_to_cpu(pmicarr[i+3]);
 
-                chippt_t* tmp_pt = malloc(sizeof(chippt_t));
+                chippt_t *tmp_pt = malloc(sizeof(chippt_t));
                 if (!tmp_pt) {
                     rc = -ENOMEM;
                     goto cleanup;
@@ -458,14 +458,14 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
             goto cleanup;
         }
 
-        chipid_t* cId = chipid;
-        chipst_t* cSt = chipst;
-        chippt_t* cPt = chippt;
+        chipid_t *cId = chipid;
+        chipst_t *cSt = chipst;
+        chippt_t *cPt = chippt;
         while (cId != NULL) {
             while (cSt != NULL) {
                 if (version == 3) {
                     while (cPt != NULL) {
-                        chipinfo_t* tmp = malloc(sizeof(chipinfo_t));
+                        chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
                         if (!tmp) {
                             rc = -ENOMEM;
                             goto cleanup;
@@ -496,7 +496,7 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
                     }
                     cPt = chippt;
                 } else {
-                    chipinfo_t* tmp = malloc(sizeof(chipinfo_t));
+                    chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
                     if (!tmp) {
                         rc = -ENOMEM;
                         goto cleanup;
@@ -533,17 +533,17 @@ chipinfo_t* fdt_get_qc_chipinfo(void* fdt, int version)
 cleanup:
     // cleanup
     while (chipid) {
-        chipid_t* tmp = chipid;
+        chipid_t *tmp = chipid;
         chipid = chipid->t_next;
         free(tmp);
     }
     while (chipst) {
-        chipst_t* tmp= chipst;
+        chipst_t *tmp= chipst;
         chipst = chipst->t_next;
         free(tmp);
     }
     while (chippt) {
-        chippt_t* tmp= chippt;
+        chippt_t *tmp= chippt;
         chippt = chippt->t_next;
         free(tmp);
     }
@@ -554,7 +554,7 @@ cleanup:
 
     // cleanup
     while (chip) {
-        chipinfo_t* tmp = chip;
+        chipinfo_t *tmp = chip;
         chip = chip->t_next;
         free(tmp);
     }
@@ -566,7 +566,7 @@ int startswith(const char *str, const char *pre)
     return strncmp(pre, str, strlen(pre)) == 0;
 }
 
-static const char* whitelist[] = {
+static const char *whitelist[] = {
     "/aliases",
     "/chosen",
     "/memory",
@@ -576,7 +576,7 @@ static const char* whitelist[] = {
     NULL,
 };
 
-int callback_fn(void* fdt, const char* path, void* fdtcopy)
+int callback_fn(void *fdt, const char *path, void *fdtcopy)
 {
     (void)(fdt);
 
@@ -593,7 +593,7 @@ int callback_fn(void* fdt, const char* path, void* fdtcopy)
 
     // scan whitelist
     int is_whitelisted = 0;
-    const char** ptr = whitelist;
+    const char **ptr = whitelist;
     while (*ptr) {
         // prefix is whitelisted
         if (startswith(path, *ptr)) {
@@ -624,12 +624,12 @@ int callback_fn(void* fdt, const char* path, void* fdtcopy)
     return 0;
 }
 
-int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
+int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp)
 {
     int rc;
     off_t off;
-    void* fdt = NULL;
-    void* fdtcopy = NULL;
+    void *fdt = NULL;
+    void *fdtcopy = NULL;
     ssize_t ssize;
     int offset_root;
     char buf[PATH_MAX];
@@ -637,7 +637,7 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
     printf("Processing %s\n", in_dtb);
 
     // open file
-    const char* filename = in_dtb;
+    const char *filename = in_dtb;
     int fd = open(filename, O_RDONLY);
     if (fd<0) {
         fprintf(stderr, "Can't open file %s\n", filename);
@@ -687,8 +687,8 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
     printf("version: %d\n", version);
 
     // get chipinfo
-    chipinfo_t* chip = fdt_get_qc_chipinfo(fdt, version);
-    if(!chip) {
+    chipinfo_t *chip = fdt_get_qc_chipinfo(fdt, version);
+    if (!chip) {
         fprintf(stderr, "can't get chipinfo\n");
         rc = -ENOMEM;
         goto next_chip;
@@ -713,7 +713,7 @@ int process_dtb(const char* in_dtb, const char* outdir, uint32_t* countp)
     list_subnodes_callback(fdt, "/", callback_fn, fdtcopy);
 
     // write new dtb's
-    chipinfo_t* t_chip;
+    chipinfo_t *t_chip;
     for (t_chip = chip; t_chip; t_chip = t_chip->t_next,(*countp)++) {
         int fdout = -1;
 
@@ -949,20 +949,20 @@ close_file:
     return rc;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     uint32_t i = 0;
     int rc = 0;
     struct dirent *dp;
-    char* filename = NULL;
+    char *filename = NULL;
 
     // validate arguments
     if (argc!=3) {
         fprintf(stderr, "Usage: %s in.dtb outdir\n", argv[0]);
         return -EINVAL;
     }
-    const char* indir = argv[1];
-    const char* outdir = argv[2];
+    const char *indir = argv[1];
+    const char *outdir = argv[2];
 
     // check directory
     if (!is_directory(outdir)) {

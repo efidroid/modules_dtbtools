@@ -43,16 +43,16 @@ typedef struct {
     uint32_t offset;
 } dt_offset_t;
 
-static void log_offset(list_node_t* list, uint32_t offset)
+static void log_offset(list_node_t *list, uint32_t offset)
 {
-    dt_offset_t* dtoff = malloc(sizeof(dt_offset_t));
+    dt_offset_t *dtoff = malloc(sizeof(dt_offset_t));
     if (!dtoff) return;
 
     dtoff->offset = offset;
     list_add_tail(list, &dtoff->node);
 }
 
-static int has_offset(list_node_t* list, uint32_t offset)
+static int has_offset(list_node_t *list, uint32_t offset)
 {
     dt_offset_t *entry;
 
@@ -118,7 +118,7 @@ int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *
     return 0;
 }
 
-int dev_tree_extract(const char* directory, struct dt_table *table)
+int dev_tree_extract(const char *directory, struct dt_table *table)
 {
     uint32_t i;
     int rc;
@@ -152,7 +152,7 @@ int dev_tree_extract(const char* directory, struct dt_table *table)
                 table_ptr += sizeof(struct dt_entry_v1);
                 break;
             case DEV_TREE_VERSION_V2:
-                dt_entry_v2 = (struct dt_entry_v2*)table_ptr;
+                dt_entry_v2 = (struct dt_entry_v2 *)table_ptr;
                 cur_dt_entry->platform_id = dt_entry_v2->platform_id;
                 cur_dt_entry->variant_id = dt_entry_v2->variant_id;
                 cur_dt_entry->soc_rev = dt_entry_v2->soc_rev;
@@ -222,14 +222,14 @@ int dev_tree_extract(const char* directory, struct dt_table *table)
         }
 
         // open file
-        FILE* f = fopen(filename, "wb+");
+        FILE *f = fopen(filename, "wb+");
         if (!f) {
             fprintf(stderr, "Can't open file %s\n", filename);
             return -1;
         }
 
         // write dtb
-        fwrite(((char*)table) + cur_dt_entry->offset, cur_dt_entry->size, 1, f);
+        fwrite(((char *)table) + cur_dt_entry->offset, cur_dt_entry->size, 1, f);
 
         // close file
         if (fclose(f)) {
@@ -241,18 +241,18 @@ int dev_tree_extract(const char* directory, struct dt_table *table)
     }
 
     while (list_is_empty(&offlist)) {
-        dt_offset_t* entry = list_remove_tail_type(&offlist, dt_offset_t, node);
+        dt_offset_t *entry = list_remove_tail_type(&offlist, dt_offset_t, node);
         free(entry);
     }
 
     return 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     int rc;
     off_t off;
-    void* dtimg = NULL;
+    void *dtimg = NULL;
     ssize_t ssize;
 
     // validate arguments
@@ -262,7 +262,7 @@ int main(int argc, char** argv)
     }
 
     // open file
-    const char* filename = argv[1];
+    const char *filename = argv[1];
     int fd = open(filename, O_RDONLY);
     if (fd<0) {
         fprintf(stderr, "Can't open file %s\n", filename);
@@ -302,7 +302,7 @@ int main(int argc, char** argv)
     }
 
     // generate devtree
-    struct dt_table* table = dtimg;
+    struct dt_table *table = dtimg;
     rc = dev_tree_extract(argv[2], table);
     if (rc) {
         fprintf(stderr, "Cannot process table\n");

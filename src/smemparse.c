@@ -46,7 +46,7 @@ struct smem {
 };
 typedef struct smem smem_t;
 
-static const char* cmd = "";
+static const char *cmd = "";
 
 static const char *smemtype2str(int type)
 {
@@ -266,7 +266,7 @@ void hexdump(const void *ptr, size_t len)
     }
 }
 
-static int process_smem(smem_t* smem, uint32_t bufsz)
+static int process_smem(smem_t *smem, uint32_t bufsz)
 {
     uint32_t alloc_info_maxsz = bufsz - (sizeof(smem_t));
     if (alloc_info_maxsz%sizeof(smem_alloc_info_t) !=0) {
@@ -278,7 +278,7 @@ static int process_smem(smem_t* smem, uint32_t bufsz)
 
     uint32_t i;
     for (i=0; i<=alloc_info_max_entries; i++) {
-        smem_alloc_info_t* alloc_info = &smem->alloc_info[i];
+        smem_alloc_info_t *alloc_info = &smem->alloc_info[i];
 
         if (alloc_info->allocated==0) {
             if (alloc_info->offset || alloc_info->size || alloc_info->base_ext) {
@@ -300,7 +300,7 @@ static int process_smem(smem_t* smem, uint32_t bufsz)
             continue;
         }
 
-        void* dataptr = ((void*)smem) + alloc_info->offset;
+        void *dataptr = ((void *)smem) + alloc_info->offset;
         if (!strcmp(cmd, "hexdump"))
             hexdump(dataptr, alloc_info->size);
     }
@@ -308,19 +308,19 @@ static int process_smem(smem_t* smem, uint32_t bufsz)
     return 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     int rc;
     off_t off;
     ssize_t ssize;
-    void* smem = NULL;
+    void *smem = NULL;
 
     // validate arguments
     if (argc<2) {
         fprintf(stderr, "Usage: %s smem.bin\n", argv[0]);
         return -EINVAL;
     }
-    const char* filename = argv[1];
+    const char *filename = argv[1];
     if (argc>=3) cmd = argv[2];
 
     // open file

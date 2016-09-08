@@ -49,11 +49,11 @@ off_t fdsize(int fd)
     return off;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     int rc;
     off_t off;
-    void* fdtimg = NULL;
+    void *fdtimg = NULL;
     ssize_t ssize;
 
     // validate arguments
@@ -63,7 +63,7 @@ int main(int argc, char** argv)
     }
 
     // open file
-    const char* filename = argv[1];
+    const char *filename = argv[1];
     int fd = open(filename, O_RDONLY);
     if (fd<0) {
         fprintf(stderr, "Can't open file %s\n", filename);
@@ -94,7 +94,7 @@ int main(int argc, char** argv)
         goto free_buffer;
     }
 
-    void* fdt = fdtimg;
+    void *fdt = fdtimg;
     uint32_t i = 0;
     while (fdt+sizeof(struct fdt_header) < fdt+off) {
         if (fdt_check_header(fdt)) break;
@@ -112,7 +112,7 @@ int main(int argc, char** argv)
         printf("write %s\n", fdtfilename);
 
         // open file
-        FILE* f = fopen(fdtfilename, "wb+");
+        FILE *f = fopen(fdtfilename, "wb+");
         if (!f) {
             fprintf(stderr, "Can't open file %s\n", fdtfilename);
             return -1;
