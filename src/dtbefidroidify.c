@@ -625,6 +625,32 @@ int callback_fn(void *fdt, const char *path, void *fdtcopy)
     return 0;
 }
 
+/**
+ * Delete a node in the fdt.
+ *
+ * @param blob      FDT blob to write into
+ * @param node_name Name of node to delete
+ * @return 0 on success, or -1 on failure
+ */
+static int delete_node(char *blob, const char *node_name)
+{
+    int node = 0;
+
+    node = fdt_path_offset(blob, node_name);
+    if (node < 0) {
+        fprintf(stderr, "can't find %s: %s\n", node_name, fdt_strerror(node));
+        return -1;
+    }
+
+    node = fdt_del_node(blob, node);
+    if (node < 0) {
+        fprintf(stderr, "can't delete %s: %s\n", node_name, fdt_strerror(node));
+        return -1;
+    }
+
+    return 0;
+}
+
 int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int remove_unused_nodes)
 {
     int rc;
@@ -712,6 +738,10 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
     if (remove_unused_nodes) {
         list_subnodes_callback(fdt, "/", callback_fn, fdtcopy);
     }
+
+    // recreate /chosen node to remove all it's contents
+    delete_node(fdtcopy, "/chosen");
+    fdt_add_subnode(fdtcopy, fdt_path_offset(fdtcopy, "/"), "chosen");
 
     // write new dtb's
     chipinfo_t *t_chip;
