@@ -40,68 +40,11 @@
 #include <dirent.h>
 
 #include <list.h>
+#include <lib/boot.h>
+#include <lib/boot/qcdt.h>
 
 #define DTB_PAD_SIZE  1024
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
-
-typedef struct {
-    list_node_t node;
-
-    char *name;
-    void *data;
-    size_t size;
-} fdtprop_t;
-
-typedef struct {
-    list_node_t node;
-
-    char *name;
-} fdtnode_t;
-
-struct chipInfo_t {
-    uint32_t version;
-    uint32_t chipset;
-    uint32_t platform;
-    uint32_t subtype;
-    uint32_t revNum;
-    uint32_t isLge;
-    uint32_t lgeRev;
-    uint32_t pmic_model[4];
-    uint32_t numId;
-    uint32_t numSt;
-    uint32_t numPt;
-    struct chipInfo_t *master;
-    struct chipInfo_t *t_next;
-};
-typedef struct chipInfo_t chipinfo_t;
-
-struct chipId_t {
-    uint32_t chipset;
-    uint32_t revNum;
-    uint32_t isLge;
-    uint32_t lgeRev;
-    uint32_t num;
-    struct chipId_t *t_next;
-};
-typedef struct chipId_t chipid_t;
-
-struct chipSt_t {
-    uint32_t platform;
-    uint32_t subtype;
-    uint32_t num;
-    struct chipSt_t *t_next;
-};
-typedef struct chipSt_t chipst_t;
-
-struct chipPt_t {
-    uint32_t pmic0;
-    uint32_t pmic1;
-    uint32_t pmic2;
-    uint32_t pmic3;
-    uint32_t num;
-    struct chipPt_t *t_next;
-};
-typedef struct chipPt_t chippt_t;
 
 typedef struct {
     uint32_t version;
@@ -239,329 +182,6 @@ int fdt_get_qc_version(void *fdt)
     return version;
 }
 
-chipinfo_t *fdt_get_qc_chipinfo(void *fdt, int version)
-{
-    int rc = 0;
-    uint32_t i;
-    int len_msm;
-    int len_board;
-    int len_pmic;
-    const struct fdt_property *prop_msm;
-    const struct fdt_property *prop_board;
-    const struct fdt_property *prop_pmic;
-    chipinfo_t *chip = NULL;
-    chipid_t *chipid = NULL;
-    chipst_t *chipst = NULL;
-    chippt_t *chippt = NULL;
-    uint32_t count1 = 0, count2 = 0, count3 = 0;
-
-    int offset_root = fdt_path_offset(fdt, "/");
-    if (offset_root<0) {
-        fprintf(stderr, "root offset not found\n");
-        return NULL;
-    }
-
-    prop_msm = fdt_get_property(fdt, offset_root, "qcom,msm-id", &len_msm);
-    prop_board = fdt_get_property(fdt, offset_root, "qcom,board-id", &len_board);
-    prop_pmic = fdt_get_property(fdt, offset_root, "qcom,pmic-id", &len_pmic);
-
-    if (!prop_msm) {
-        fprintf(stderr, "msm prop not found\n");
-        return NULL;
-    }
-
-    if (version==1) {
-        uint32_t *msmarr = (uint32_t *)prop_msm->data;
-
-        if (len_msm%(sizeof(uint32_t)*3) == 0) {
-            for (i=0; i<len_msm/sizeof(uint32_t); i+=3) {
-                uint32_t chipset = fdt32_to_cpu(msmarr[i+0]);
-                uint32_t platform = fdt32_to_cpu(msmarr[i+1]);
-                uint32_t revNum = fdt32_to_cpu(msmarr[i+2]);
-
-                chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
-                if (!tmp) {
-                    rc = -ENOMEM;
-                    goto cleanup;
-                }
-                if (!chip) {
-                    chip = tmp;
-                    chip->t_next = NULL;
-                } else {
-                    tmp->t_next = chip->t_next;
-                    chip->t_next = tmp;
-                }
-                tmp->version  = version;
-                tmp->chipset  = chipset;
-                tmp->platform = platform;
-                tmp->subtype  = 0;
-                tmp->revNum   = revNum;
-                tmp->isLge    = 0;
-                tmp->pmic_model[0] = 0;
-                tmp->pmic_model[1] = 0;
-                tmp->pmic_model[2] = 0;
-                tmp->pmic_model[3] = 0;
-                tmp->numId = 3;
-                tmp->numSt = 0;
-                tmp->numPt = 0;
-                count1++;
-            }
-        }
-
-        // LGE format
-        else if (len_msm%(sizeof(uint32_t)*4) == 0) {
-            for (i=0; i<len_msm/sizeof(uint32_t); i+=4) {
-                uint32_t chipset = fdt32_to_cpu(msmarr[i+0]);
-                uint32_t platform = fdt32_to_cpu(msmarr[i+1]);
-                uint32_t revNum = fdt32_to_cpu(msmarr[i+2]);
-                uint32_t lgeRev = fdt32_to_cpu(msmarr[i+3]);
-
-                chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
-                if (!tmp) {
-                    rc = -ENOMEM;
-                    goto cleanup;
-                }
-                if (!chip) {
-                    chip = tmp;
-                    chip->t_next = NULL;
-                } else {
-                    tmp->t_next = chip->t_next;
-                    chip->t_next = tmp;
-                }
-                tmp->version  = version;
-                tmp->chipset  = chipset;
-                tmp->platform = platform;
-                tmp->subtype  = 0;
-                tmp->revNum   = revNum;
-                tmp->lgeRev   = lgeRev;
-                tmp->isLge    = 1;
-                tmp->pmic_model[0] = 0;
-                tmp->pmic_model[1] = 0;
-                tmp->pmic_model[2] = 0;
-                tmp->pmic_model[3] = 0;
-                tmp->numId = 4;
-                tmp->numSt = 0;
-                tmp->numPt = 0;
-                count1++;
-            }
-        }
-
-        else {
-            fprintf(stderr, "unknown msm-id format for V1 dtb\n");
-            return NULL;
-        }
-
-        return chip;
-    }
-
-    else if (version==2 || version==3) {
-        if (!prop_board) {
-            fprintf(stderr, "board prop not found\n");
-            return NULL;
-        }
-        if (version==3 && !prop_pmic) {
-            fprintf(stderr, "pmic prop not found\n");
-            return NULL;
-        }
-        if (len_msm%(sizeof(uint32_t)*2)) {
-            fprintf(stderr, "msm prop has invalid length\n");
-            return NULL;
-        }
-
-        uint32_t *msmarr = (uint32_t *)prop_msm->data;
-        for (i=0; i<len_msm/sizeof(uint32_t); i+=2) {
-            uint32_t chipset = fdt32_to_cpu(msmarr[i+0]);
-            uint32_t revNum = fdt32_to_cpu(msmarr[i+1]);
-
-            chipid_t *tmp_id = malloc(sizeof(chipid_t));
-            if (!tmp_id) {
-                rc = -ENOMEM;
-                goto cleanup;
-            }
-            if (!chipid) {
-                chipid = tmp_id;
-                chipid->t_next = NULL;
-            } else {
-                tmp_id->t_next = chipid->t_next;
-                chipid->t_next = tmp_id;
-            }
-            tmp_id->chipset = chipset;
-            tmp_id->revNum = revNum;
-            tmp_id->isLge = 0;
-            tmp_id->num = 2;
-            count1++;
-        }
-
-        uint32_t *boardarr = (uint32_t *)prop_board->data;
-        for (i=0; i<len_board/sizeof(uint32_t); i+=2) {
-            uint32_t platform = fdt32_to_cpu(boardarr[i+0]);
-            uint32_t subtype = fdt32_to_cpu(boardarr[i+1]);
-
-            chipst_t *tmp_st = malloc(sizeof(chipst_t));
-            if (!tmp_st) {
-                rc = -ENOMEM;
-                goto cleanup;
-            }
-            if (!chipst) {
-                chipst = tmp_st;
-                chipst->t_next = NULL;
-            } else {
-                tmp_st->t_next = chipst->t_next;
-                chipst->t_next = tmp_st;
-            }
-
-            tmp_st->platform = platform;
-            tmp_st->subtype = subtype;
-            tmp_st->num = 2;
-            count2++;
-        }
-
-        if (prop_pmic) {
-            uint32_t *pmicarr = (uint32_t *)prop_pmic->data;
-            for (i=0; i<len_pmic/sizeof(uint32_t); i+=4) {
-                uint32_t pmic0 = fdt32_to_cpu(pmicarr[i+0]);
-                uint32_t pmic1 = fdt32_to_cpu(pmicarr[i+1]);
-                uint32_t pmic2 = fdt32_to_cpu(pmicarr[i+2]);
-                uint32_t pmic3 = fdt32_to_cpu(pmicarr[i+3]);
-
-                chippt_t *tmp_pt = malloc(sizeof(chippt_t));
-                if (!tmp_pt) {
-                    rc = -ENOMEM;
-                    goto cleanup;
-                }
-                if (!chippt) {
-                    chippt = tmp_pt;
-                    chippt->t_next = NULL;
-                } else {
-                    tmp_pt->t_next = chippt->t_next;
-                    chippt->t_next = tmp_pt;
-                }
-
-                tmp_pt->pmic0 = pmic0;
-                tmp_pt->pmic1 = pmic1;
-                tmp_pt->pmic2 = pmic2;
-                tmp_pt->pmic3 = pmic3;
-                tmp_pt->num = 4;
-                count3++;
-            }
-        }
-
-        if (count1==0) {
-            rc = -ENOENT;
-            goto cleanup;
-        }
-        if (count2==0) {
-            rc = -ENOENT;
-            goto cleanup;
-        }
-        if (version==3 && count3==0) {
-            rc = -ENOENT;
-            goto cleanup;
-        }
-
-        chipid_t *cId = chipid;
-        chipst_t *cSt = chipst;
-        chippt_t *cPt = chippt;
-        while (cId != NULL) {
-            while (cSt != NULL) {
-                if (version == 3) {
-                    while (cPt != NULL) {
-                        chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
-                        if (!tmp) {
-                            rc = -ENOMEM;
-                            goto cleanup;
-                        }
-                        if (!chip) {
-                            chip = tmp;
-                            chip->t_next = NULL;
-                        } else {
-                            tmp->t_next = chip->t_next;
-                            chip->t_next = tmp;
-                        }
-
-                        tmp->version  = version;
-                        tmp->chipset  = cId->chipset;
-                        tmp->platform = cSt->platform;
-                        tmp->revNum   = cId->revNum;
-                        tmp->subtype  = cSt->subtype;
-                        tmp->isLge    = cId->isLge;
-                        tmp->lgeRev   = cId->lgeRev;
-                        tmp->pmic_model[0] = cPt->pmic0;
-                        tmp->pmic_model[1] = cPt->pmic1;
-                        tmp->pmic_model[2] = cPt->pmic2;
-                        tmp->pmic_model[3] = cPt->pmic3;
-                        tmp->numId = cId->num;
-                        tmp->numSt = cSt->num;
-                        tmp->numPt = cPt->num;
-                        cPt = cPt->t_next;
-                    }
-                    cPt = chippt;
-                } else {
-                    chipinfo_t *tmp = malloc(sizeof(chipinfo_t));
-                    if (!tmp) {
-                        rc = -ENOMEM;
-                        goto cleanup;
-                    }
-                    if (!chip) {
-                        chip = tmp;
-                        chip->t_next = NULL;
-                    } else {
-                        tmp->t_next = chip->t_next;
-                        chip->t_next = tmp;
-                    }
-                    tmp->version  = version;
-                    tmp->chipset  = cId->chipset;
-                    tmp->platform = cSt->platform;
-                    tmp->revNum   = cId->revNum;
-                    tmp->subtype  = cSt->subtype;
-                    tmp->isLge    = cId->isLge;
-                    tmp->lgeRev   = cId->lgeRev;
-                    tmp->pmic_model[0] = 0;
-                    tmp->pmic_model[1] = 0;
-                    tmp->pmic_model[2] = 0;
-                    tmp->pmic_model[3] = 0;
-                    tmp->numId = cId->num;
-                    tmp->numSt = cSt->num;
-                    tmp->numPt = 0;
-                }
-                cSt = cSt->t_next;
-            }
-            cSt = chipst;
-            cId = cId->t_next;
-        }
-    }
-
-cleanup:
-    // cleanup
-    while (chipid) {
-        chipid_t *tmp = chipid;
-        chipid = chipid->t_next;
-        free(tmp);
-    }
-    while (chipst) {
-        chipst_t *tmp= chipst;
-        chipst = chipst->t_next;
-        free(tmp);
-    }
-    while (chippt) {
-        chippt_t *tmp= chippt;
-        chippt = chippt->t_next;
-        free(tmp);
-    }
-
-    if (!rc) {
-        return chip;
-    }
-
-    // cleanup
-    while (chip) {
-        chipinfo_t *tmp = chip;
-        chip = chip->t_next;
-        free(tmp);
-    }
-    return NULL;
-}
-
 int startswith(const char *str, const char *pre)
 {
     return strncmp(pre, str, strlen(pre)) == 0;
@@ -651,6 +271,14 @@ static int delete_node(char *blob, const char *node_name)
     return 0;
 }
 
+static void generate_entries_add_cb(dt_entry_local_t *dt_entry, dt_entry_node_t *dt_list, const char *model) {
+    (void)(model);
+
+    dt_entry_node_t *dt_node = dt_entry_list_alloc_node();
+    memcpy(dt_node->dt_entry_m, dt_entry, sizeof(dt_entry_local_t));
+    dt_entry_list_insert(dt_list, dt_node);
+}
+
 int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int remove_unused_nodes)
 {
     int rc;
@@ -660,8 +288,16 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
     ssize_t ssize;
     int offset_root;
     char buf[PATH_MAX];
+    dt_entry_node_t *dt_list = NULL;
 
     printf("Processing %s\n", in_dtb);
+
+    /* Initialize the dtb entry node*/
+    dt_list = dt_entry_list_create();
+    if(!dt_list) {
+        fprintf(stderr, "Can't allocate dt list\n");
+        return -ENOMEM;
+    }
 
     // open file
     const char *filename = in_dtb;
@@ -711,11 +347,11 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
     printf("version: %d\n", version);
 
     // get chipinfo
-    chipinfo_t *chip = fdt_get_qc_chipinfo(fdt, version);
-    if (!chip) {
-        fprintf(stderr, "can't get chipinfo\n");
-        rc = -ENOMEM;
-        goto next_chip;
+    rc = libboot_qcdt_generate_entries(fdt, fdt_totalsize(fdt), dt_list, generate_entries_add_cb);
+    if (rc!=1) {
+        fprintf(stderr, "can't get chipinfo: %d\n", rc);
+        rc = -1;
+        goto free_buffer;
     }
 
     // allocate fdcopy
@@ -744,26 +380,28 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
     fdt_add_subnode(fdtcopy, fdt_path_offset(fdtcopy, "/"), "chosen");
 
     // write new dtb's
-    chipinfo_t *t_chip;
-    for (t_chip = chip; t_chip; t_chip = t_chip->t_next,(*countp)++) {
+    dt_entry_node_t *dt_node = NULL;
+    dt_entry_local_t *dt_entry = NULL;
+    libboot_list_for_every_entry(&dt_list->node, dt_node, dt_entry_node_t, node) {
+        dt_entry = dt_node->dt_entry_m;
         int fdout = -1;
 
         printf("chipset: %u, rev: %u, platform: %u, subtype: %u, pmic0: %u, pmic1: %u, pmic2: %u, pmic3: %u\n",
-               t_chip->chipset, t_chip->revNum, t_chip->platform, t_chip->subtype,
-               t_chip->pmic_model[0], t_chip->pmic_model[1], t_chip->pmic_model[2], t_chip->pmic_model[3]);
+               dt_entry->platform_id, dt_entry->soc_rev, dt_entry->variant_id, dt_entry->board_hw_subtype,
+               dt_entry->pmic_rev[0], dt_entry->pmic_rev[1], dt_entry->pmic_rev[2], dt_entry->pmic_rev[3]);
 
         // create efidroid socinfo
         efidroid_fdtinfo_t fdtinfo = {
             .version = cpu_to_fdt32(version),
-            .chipset = cpu_to_fdt32(t_chip->chipset),
-            .platform = cpu_to_fdt32(t_chip->platform),
-            .subtype = cpu_to_fdt32(t_chip->subtype),
-            .revNum = cpu_to_fdt32(t_chip->revNum),
+            .chipset = cpu_to_fdt32(dt_entry->platform_id),
+            .platform = cpu_to_fdt32(dt_entry->variant_id),
+            .subtype = cpu_to_fdt32(dt_entry->board_hw_subtype),
+            .revNum = cpu_to_fdt32(dt_entry->soc_rev),
             .pmic_model = {
-                cpu_to_fdt32(t_chip->pmic_model[0]),
-                cpu_to_fdt32(t_chip->pmic_model[1]),
-                cpu_to_fdt32(t_chip->pmic_model[2]),
-                cpu_to_fdt32(t_chip->pmic_model[3]),
+                cpu_to_fdt32(dt_entry->pmic_rev[0]),
+                cpu_to_fdt32(dt_entry->pmic_rev[1]),
+                cpu_to_fdt32(dt_entry->pmic_rev[2]),
+                cpu_to_fdt32(dt_entry->pmic_rev[3]),
             },
         };
 
@@ -777,36 +415,38 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 goto next_chip;
             }
 
-            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,msm-id", t_chip->chipset);
+            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->platform_id);
             if (rc < 0) {
                 fprintf(stderr, "Can't set property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", t_chip->platform);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->variant_id);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", t_chip->revNum);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->soc_rev);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
+#if 0
             // LGE
             if (t_chip->numId==4 && t_chip->isLge) {
-                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", t_chip->lgeRev);
+                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->lgeRev);
                 if (rc < 0) {
                     fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                     rc = -1;
                     goto next_chip;
                 }
             }
+#endif
         } else if (version==2 || version==3) {
             // get root
             offset_root = fdt_path_offset(fdtcopy, "/");
@@ -816,14 +456,14 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 goto next_chip;
             }
 
-            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,msm-id", t_chip->chipset);
+            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->platform_id);
             if (rc < 0) {
                 fprintf(stderr, "Can't set property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", t_chip->revNum);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->soc_rev);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
@@ -841,14 +481,14 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 goto next_chip;
             }
 
-            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,board-id", t_chip->platform);
+            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,board-id", dt_entry->variant_id);
             if (rc < 0) {
                 fprintf(stderr, "Can't set property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,board-id", t_chip->subtype);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,board-id", dt_entry->board_hw_subtype);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
@@ -866,28 +506,28 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 goto next_chip;
             }
 
-            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,pmic-id", t_chip->pmic_model[0]);
+            rc = fdt_setprop_u32(fdtcopy, offset_root, "qcom,pmic-id", dt_entry->pmic_rev[0]);
             if (rc < 0) {
                 fprintf(stderr, "Can't set property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,pmic-id", t_chip->pmic_model[1]);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,pmic-id", dt_entry->pmic_rev[1]);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,pmic-id", t_chip->pmic_model[2]);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,pmic-id", dt_entry->pmic_rev[2]);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
                 goto next_chip;
             }
 
-            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,pmic-id", t_chip->pmic_model[3]);
+            rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,pmic-id", dt_entry->pmic_rev[3]);
             if (rc < 0) {
                 fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                 rc = -1;
@@ -995,6 +635,8 @@ int main(int argc, char **argv)
     const char *indir = argv[1];
     const char *outdir = argv[2];
     int remove_unused_nodes = !strcmp(argv[3], "1");
+
+    libboot_init();
 
     // check directory
     if (!is_directory(outdir)) {

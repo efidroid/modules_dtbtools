@@ -36,7 +36,8 @@
 #include <limits.h>
 
 #include <list.h>
-#include <dev_tree.h>
+#include <lib/boot.h>
+#include <lib/boot/qcdt.h>
 
 typedef struct {
     list_node_t node;
@@ -82,7 +83,7 @@ off_t fdsize(int fd)
 }
 
 /* Returns 0 if the device tree is valid. */
-int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *dt_hdr_size)
+int dev_tree_validate(dt_table_t *table, unsigned int page_size, uint32_t *dt_hdr_size)
 {
     int dt_entry_size;
     uint64_t hdr_size;
@@ -94,11 +95,11 @@ int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *
     }
 
     if (table->version == DEV_TREE_VERSION_V1) {
-        dt_entry_size = sizeof(struct dt_entry_v1);
+        dt_entry_size = sizeof(dt_entry_v1_t);
     } else if (table->version == DEV_TREE_VERSION_V2) {
-        dt_entry_size = sizeof(struct dt_entry_v2);
+        dt_entry_size = sizeof(dt_entry_v2_t);
     } else if (table->version == DEV_TREE_VERSION_V3) {
-        dt_entry_size = sizeof(struct dt_entry);
+        dt_entry_size = sizeof(dt_entry_t);
     } else {
         fprintf(stderr, "Unsupported version (%d) in DT table \n",
                 table->version);
@@ -118,15 +119,15 @@ int dev_tree_validate(struct dt_table *table, unsigned int page_size, uint32_t *
     return 0;
 }
 
-int dev_tree_extract(const char *directory, struct dt_table *table)
+int dev_tree_extract(const char *directory, dt_table_t *table)
 {
     uint32_t i;
     int rc;
     unsigned char *table_ptr = NULL;
-    struct dt_entry dt_entry_buf_1;
-    struct dt_entry_v1 *dt_entry_v1 = NULL;
-    struct dt_entry_v2 *dt_entry_v2 = NULL;
-    struct dt_entry *cur_dt_entry = NULL;
+    dt_entry_t dt_entry_buf_1;
+    dt_entry_v1_t *dt_entry_v1 = NULL;
+    dt_entry_v2_t *dt_entry_v2 = NULL;
+    dt_entry_t *cur_dt_entry = NULL;
     list_node_t offlist;
 
     list_initialize(&offlist);
@@ -138,7 +139,7 @@ int dev_tree_extract(const char *directory, struct dt_table *table)
         memset(cur_dt_entry, 0, sizeof(*cur_dt_entry));
         switch (table->version) {
             case DEV_TREE_VERSION_V1:
-                dt_entry_v1 = (struct dt_entry_v1 *)table_ptr;
+                dt_entry_v1 = (dt_entry_v1_t *)table_ptr;
                 cur_dt_entry->platform_id = dt_entry_v1->platform_id;
                 cur_dt_entry->variant_id = dt_entry_v1->variant_id;
                 cur_dt_entry->soc_rev = dt_entry_v1->soc_rev;
@@ -149,10 +150,10 @@ int dev_tree_extract(const char *directory, struct dt_table *table)
                 cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
                 cur_dt_entry->offset = dt_entry_v1->offset;
                 cur_dt_entry->size = dt_entry_v1->size;
-                table_ptr += sizeof(struct dt_entry_v1);
+                table_ptr += sizeof(dt_entry_v1_t);
                 break;
             case DEV_TREE_VERSION_V2:
-                dt_entry_v2 = (struct dt_entry_v2 *)table_ptr;
+                dt_entry_v2 = (dt_entry_v2_t *)table_ptr;
                 cur_dt_entry->platform_id = dt_entry_v2->platform_id;
                 cur_dt_entry->variant_id = dt_entry_v2->variant_id;
                 cur_dt_entry->soc_rev = dt_entry_v2->soc_rev;
@@ -176,11 +177,11 @@ int dev_tree_extract(const char *directory, struct dt_table *table)
                 cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
                 cur_dt_entry->offset = dt_entry_v2->offset;
                 cur_dt_entry->size = dt_entry_v2->size;
-                table_ptr += sizeof(struct dt_entry_v2);
+                table_ptr += sizeof(dt_entry_v2_t);
                 break;
             case DEV_TREE_VERSION_V3:
-                memcpy(cur_dt_entry, (struct dt_entry *)table_ptr,
-                       sizeof(struct dt_entry));
+                memcpy(cur_dt_entry, (dt_entry_t *)table_ptr,
+                       sizeof(dt_entry_t));
                 /* For V3 version of DTBs we have platform version field as part
                  * of variant ID, in such case the subtype will be mentioned as 0x0
                  * As the qcom, board-id = <0xSSPMPmPH, 0x0>
@@ -194,7 +195,7 @@ int dev_tree_extract(const char *directory, struct dt_table *table)
                 if (cur_dt_entry->board_hw_subtype == 0)
                     cur_dt_entry->board_hw_subtype = (cur_dt_entry->variant_id >> 0x18);
 
-                table_ptr += sizeof(struct dt_entry);
+                table_ptr += sizeof(dt_entry_t);
                 break;
             default:
                 fprintf(stderr, "ERROR: Unsupported version (%d) in DT table \n",
@@ -261,6 +262,8 @@ int main(int argc, char **argv)
         return -EINVAL;
     }
 
+    libboot_init();
+
     // open file
     const char *filename = argv[1];
     int fd = open(filename, O_RDONLY);
@@ -302,7 +305,7 @@ int main(int argc, char **argv)
     }
 
     // generate devtree
-    struct dt_table *table = dtimg;
+    dt_table_t *table = dtimg;
     rc = dev_tree_extract(argv[2], table);
     if (rc) {
         fprintf(stderr, "Cannot process table\n");

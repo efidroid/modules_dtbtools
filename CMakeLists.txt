@@ -16,6 +16,7 @@ add_executable(dtbtool
 add_executable(qcdtextract
     src/qcdtextract.c
 )
+target_link_libraries(qcdtextract boot fdt z)
 
 # fdtextract
 add_executable(fdtextract
@@ -27,7 +28,7 @@ target_link_libraries(fdtextract fdt)
 add_executable(dtbefidroidify
     src/dtbefidroidify.c
 )
-target_link_libraries(dtbefidroidify fdt)
+target_link_libraries(dtbefidroidify boot fdt z)
 
 # smemparse
 add_executable(smemparse
