@@ -46,15 +46,6 @@
 #define DTB_PAD_SIZE  1024
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
 
-typedef struct {
-    uint32_t version;
-    uint32_t chipset;
-    uint32_t platform;
-    uint32_t subtype;
-    uint32_t revNum;
-    uint32_t pmic_model[4];
-} efidroid_fdtinfo_t;
-
 off_t fdsize(int fd)
 {
     off_t off;
@@ -386,24 +377,19 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         dt_entry = dt_node->dt_entry_m;
         int fdout = -1;
 
-        printf("chipset: %u, rev: %u, platform: %u, subtype: %u, pmic0: %u, pmic1: %u, pmic2: %u, pmic3: %u\n",
+        // clear dtb data
+        dt_entry->dtb_data = NULL;
+        dt_entry->dtb_size = 0;
+
+        printf("chipset: %u, rev: %u, platform: %u, subtype: %u, pmic0: %u, pmic1: %u, pmic2: %u, pmic3: %u",
                dt_entry->platform_id, dt_entry->soc_rev, dt_entry->variant_id, dt_entry->board_hw_subtype,
                dt_entry->pmic_rev[0], dt_entry->pmic_rev[1], dt_entry->pmic_rev[2], dt_entry->pmic_rev[3]);
 
-        // create efidroid socinfo
-        efidroid_fdtinfo_t fdtinfo = {
-            .version = cpu_to_fdt32(version),
-            .chipset = cpu_to_fdt32(dt_entry->platform_id),
-            .platform = cpu_to_fdt32(dt_entry->variant_id),
-            .subtype = cpu_to_fdt32(dt_entry->board_hw_subtype),
-            .revNum = cpu_to_fdt32(dt_entry->soc_rev),
-            .pmic_model = {
-                cpu_to_fdt32(dt_entry->pmic_rev[0]),
-                cpu_to_fdt32(dt_entry->pmic_rev[1]),
-                cpu_to_fdt32(dt_entry->pmic_rev[2]),
-                cpu_to_fdt32(dt_entry->pmic_rev[3]),
-            },
-        };
+        if(!strcmp(parser, "qcom_lge")) {
+            printf(", lgerev: %x", dt_entry->lge_rev);
+        }
+
+        printf("\n");
 
         // patch msm-id
         if (version==1) {
@@ -436,17 +422,14 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 goto next_chip;
             }
 
-#if 0
-            // LGE
-            if (t_chip->numId==4 && t_chip->isLge) {
-                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->lgeRev);
+            if(!strcmp(parser, "qcom_lge")) {
+                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->lge_rev);
                 if (rc < 0) {
                     fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                     rc = -1;
                     goto next_chip;
                 }
             }
-#endif
         } else if (version==2 || version==3) {
             // get root
             offset_root = fdt_path_offset(fdtcopy, "/");
@@ -544,7 +527,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         }
 
         // write efidroid soc info
-        rc = fdt_setprop(fdtcopy, offset_root, "efidroid-soc-info", &fdtinfo, sizeof(fdtinfo));
+        rc = fdt_setprop(fdtcopy, offset_root, "efidroid-soc-info", dt_entry, sizeof(*dt_entry));
         if (rc<0) {
             fprintf(stderr, "Can't set efidroid prop %s\n", fdt_strerror(rc));
             rc = -1;
@@ -552,7 +535,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         }
 
         // build path
-        ssize = snprintf(buf, sizeof(buf), "%s/%u.dtb", outdir, *countp);
+        ssize = snprintf(buf, sizeof(buf), "%s/%u.dtb", outdir, (*countp)++);
         if (ssize<0 || (size_t)ssize>=sizeof(buf)) {
             fprintf(stderr, "Can't build filepath %ld\n", ssize);
             rc = -1;
