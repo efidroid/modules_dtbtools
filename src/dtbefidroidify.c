@@ -279,7 +279,7 @@ static void generate_entries_add_cb(dt_entry_local_t *dt_entry, dt_entry_node_t 
     dt_entry_list_insert(dt_list, dt_node);
 }
 
-int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int remove_unused_nodes)
+int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int remove_unused_nodes, const char *parser)
 {
     int rc;
     off_t off;
@@ -347,7 +347,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
     printf("version: %d\n", version);
 
     // get chipinfo
-    rc = libboot_qcdt_generate_entries(fdt, fdt_totalsize(fdt), dt_list, generate_entries_add_cb);
+    rc = libboot_qcdt_generate_entries(fdt, fdt_totalsize(fdt), dt_list, generate_entries_add_cb, parser);
     if (rc!=1) {
         fprintf(stderr, "can't get chipinfo: %d\n", rc);
         rc = -1;
@@ -628,13 +628,14 @@ int main(int argc, char **argv)
     char *filename = NULL;
 
     // validate arguments
-    if (argc!=4) {
-        fprintf(stderr, "Usage: %s [in.dtb|indir] outdir remove_unused_nodes\n", argv[0]);
+    if (argc!=5) {
+        fprintf(stderr, "Usage: %s [in.dtb|indir] outdir remove_unused_nodes parser\n", argv[0]);
         return -EINVAL;
     }
     const char *indir = argv[1];
     const char *outdir = argv[2];
     int remove_unused_nodes = !strcmp(argv[3], "1");
+    const char *parser = argv[4];
 
     libboot_init();
 
@@ -646,7 +647,7 @@ int main(int argc, char **argv)
 
     // check directory
     if (!is_directory(indir)) {
-        return process_dtb(indir, outdir, &i, remove_unused_nodes);
+        return process_dtb(indir, outdir, &i, remove_unused_nodes, parser);
     }
 
     DIR *dir = opendir(indir);
@@ -686,7 +687,7 @@ int main(int argc, char **argv)
                 strncat(filename, "/", 1);
                 strncat(filename, dp->d_name, flen);
 
-                rc = process_dtb(filename, outdir, &i, remove_unused_nodes);
+                rc = process_dtb(filename, outdir, &i, remove_unused_nodes, parser);
                 if (rc) break;
 
                 free(filename);
