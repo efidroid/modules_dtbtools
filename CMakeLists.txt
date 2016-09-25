@@ -17,6 +17,9 @@ add_executable(qcdtextract
     src/qcdtextract.c
 )
 target_link_libraries(qcdtextract boot fdt z)
+target_include_directories(qcdtextract PUBLIC
+    ${HOST_LIBBOOT_SRC}/include_private
+)
 
 # fdtextract
 add_executable(fdtextract

@@ -38,6 +38,7 @@
 #include <list.h>
 #include <lib/boot.h>
 #include <lib/boot/qcdt.h>
+#include <lib/boot/internal/qcdt.h>
 
 typedef struct {
     list_node_t node;

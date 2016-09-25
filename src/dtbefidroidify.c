@@ -372,21 +372,22 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
 
     // write new dtb's
     dt_entry_node_t *dt_node = NULL;
-    dt_entry_local_t *dt_entry = NULL;
+    dt_entry_data_t *dt_entry = NULL;
     libboot_list_for_every_entry(&dt_list->node, dt_node, dt_entry_node_t, node) {
-        dt_entry = dt_node->dt_entry_m;
+        dt_entry = &dt_node->dt_entry_m->data;
         int fdout = -1;
-
-        // clear dtb data
-        dt_entry->dtb_data = NULL;
-        dt_entry->dtb_size = 0;
+        const char* parser_name = dt_node->dt_entry_m->parser;
 
         printf("chipset: %u, rev: %u, platform: %u, subtype: %u, pmic0: %u, pmic1: %u, pmic2: %u, pmic3: %u",
                dt_entry->platform_id, dt_entry->soc_rev, dt_entry->variant_id, dt_entry->board_hw_subtype,
                dt_entry->pmic_rev[0], dt_entry->pmic_rev[1], dt_entry->pmic_rev[2], dt_entry->pmic_rev[3]);
 
-        if(!strcmp(parser, "qcom_lge")) {
-            printf(", lgerev: %x", dt_entry->lge_rev);
+        if(!strcmp(parser_name, "qcom_lge")) {
+            printf(", lgerev: %x", dt_entry->u.lge.lge_rev);
+        }
+
+        if(!strcmp(parser_name, "qcom_oppo")) {
+            printf(", oppoid: %x/%x", dt_entry->u.oppo.id0, dt_entry->u.oppo.id1);
         }
 
         printf("\n");
@@ -422,8 +423,8 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 goto next_chip;
             }
 
-            if(!strcmp(parser, "qcom_lge")) {
-                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->lge_rev);
+            if(!strcmp(parser_name, "qcom_lge")) {
+                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,msm-id", dt_entry->u.lge.lge_rev);
                 if (rc < 0) {
                     fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
                     rc = -1;
@@ -477,6 +478,22 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                 rc = -1;
                 goto next_chip;
             }
+
+            if(!strcmp(parser_name, "qcom_oppo")) {
+                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,board-id", dt_entry->u.oppo.id0);
+                if (rc < 0) {
+                    fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
+                    rc = -1;
+                    goto next_chip;
+                }
+
+                rc = fdt_appendprop_u32(fdtcopy, offset_root, "qcom,board-id", dt_entry->u.oppo.id1);
+                if (rc < 0) {
+                    fprintf(stderr, "Can't append property %s\n", fdt_strerror(offset_root));
+                    rc = -1;
+                    goto next_chip;
+                }
+            }
         }
 
         // patch pmic-id
@@ -528,6 +545,14 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
 
         // write efidroid soc info
         rc = fdt_setprop(fdtcopy, offset_root, "efidroid-soc-info", dt_entry, sizeof(*dt_entry));
+        if (rc<0) {
+            fprintf(stderr, "Can't set efidroid prop %s\n", fdt_strerror(rc));
+            rc = -1;
+            goto next_chip;
+        }
+
+        // write parser name
+        rc = fdt_setprop_string(fdtcopy, offset_root, "efidroid-fdt-parser", parser_name);
         if (rc<0) {
             fprintf(stderr, "Can't set efidroid prop %s\n", fdt_strerror(rc));
             rc = -1;
