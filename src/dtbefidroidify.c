@@ -989,7 +989,7 @@ int main(int argc, char **argv)
 
     // validate arguments
     if (argc!=4) {
-        fprintf(stderr, "Usage: %s in.dtb outdir remove_unused_nodes\n", argv[0]);
+        fprintf(stderr, "Usage: %s [in.dtb|indir] outdir remove_unused_nodes\n", argv[0]);
         return -EINVAL;
     }
     const char *indir = argv[1];
