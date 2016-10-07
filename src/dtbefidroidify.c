@@ -151,28 +151,6 @@ int list_subnodes_callback(void *blob, const char *parentpath, int (*callback)(v
     return 0;
 }
 
-int fdt_get_qc_version(void *fdt)
-{
-    int len;
-    int version = 1;
-
-    int offset_root = fdt_path_offset(fdt, "/");
-    if (offset_root<0) {
-        return -1;
-    }
-
-    if (!fdt_get_property(fdt, offset_root, "qcom,msm-id", &len))
-        return -1;
-
-    if (fdt_get_property(fdt, offset_root, "qcom,board-id", &len))
-        version = 2;
-
-    if (fdt_get_property(fdt, offset_root, "qcom,pmic-id", &len))
-        version = 3;
-
-    return version;
-}
-
 int startswith(const char *str, const char *pre)
 {
     return strncmp(pre, str, strlen(pre)) == 0;
@@ -329,14 +307,6 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         goto free_buffer;
     }
 
-    // get qcdt version
-    int version = fdt_get_qc_version(fdt);
-    if (version<0) {
-        fprintf(stderr, "can't get qcfdt version\n");
-        goto free_buffer;
-    }
-    printf("version: %d\n", version);
-
     // get chipinfo
     rc = libboot_qcdt_generate_entries(fdt, fdt_totalsize(fdt), dt_list, generate_entries_add_cb, parser);
     if (rc!=1) {
@@ -393,7 +363,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         printf("\n");
 
         // patch msm-id
-        if (version==1) {
+        if (dt_entry->version==1) {
             // get root
             offset_root = fdt_path_offset(fdtcopy, "/");
             if (offset_root<0) {
@@ -431,7 +401,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
                     goto next_chip;
                 }
             }
-        } else if (version==2 || version==3) {
+        } else if (dt_entry->version==2 || dt_entry->version==3) {
             // get root
             offset_root = fdt_path_offset(fdtcopy, "/");
             if (offset_root<0) {
@@ -456,7 +426,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         }
 
         // patch board-id
-        if (version==2 || version==3) {
+        if (dt_entry->version==2 || dt_entry->version==3) {
             // get root
             offset_root = fdt_path_offset(fdtcopy, "/");
             if (offset_root<0) {
@@ -497,7 +467,7 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
         }
 
         // patch pmic-id
-        if (version==3) {
+        if (dt_entry->version==3) {
             // get root
             offset_root = fdt_path_offset(fdtcopy, "/");
             if (offset_root<0) {
