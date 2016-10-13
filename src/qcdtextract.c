@@ -120,7 +120,7 @@ int dev_tree_validate(dt_table_t *table, unsigned int page_size, uint32_t *dt_hd
     return 0;
 }
 
-int dev_tree_extract(const char *directory, dt_table_t *table)
+int dev_tree_extract(const char *directory, size_t filesize, dt_table_t *table)
 {
     uint32_t i;
     int rc;
@@ -204,6 +204,10 @@ int dev_tree_extract(const char *directory, dt_table_t *table)
                 return -1;
         }
 
+        if (cur_dt_entry->offset > filesize) {
+            fprintf(stderr, "ERROR: offset %lx of entry %u is greate than the filesize %lx\n", (uint64_t)cur_dt_entry->offset, i, (uint64_t)filesize);
+            return -1;
+        }
 
         int skip = has_offset(&offlist, cur_dt_entry->offset);
         fprintf(stdout, "%s chipset: %u, rev: %u, platform: %u, subtype: %u, pmic0: %u, pmic1: %u, pmic2: %u, pmic3: %u\n",
@@ -307,7 +311,7 @@ int main(int argc, char **argv)
 
     // generate devtree
     dt_table_t *table = dtimg;
-    rc = dev_tree_extract(argv[2], table);
+    rc = dev_tree_extract(argv[2], (size_t)ssize, table);
     if (rc) {
         fprintf(stderr, "Cannot process table\n");
         goto free_buffer;
