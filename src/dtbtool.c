@@ -112,7 +112,7 @@ char *dt_tag = QCDT_DT_TAG;
 int   verbose;
 int   page_size = PAGE_SIZE_DEF;
 int   version_override = 0;
-int   is_motorola = 0;
+int   motorola_version = 0;
 
 void print_help()
 {
@@ -126,7 +126,7 @@ void print_help()
     log_info("  --verbose/-v         verbose\n");
     log_info("  --force-v2/-2        output dtb v2 format\n");
     log_info("  --force-v3/-3        output dtb v3 format\n");
-    log_info("  --motorola/m         output Motorola dtb format\n");
+    log_info("  --motorola/m         Motorola dtb version\n");
     log_info("  --help/-h            this help screen\n");
 }
 
@@ -141,13 +141,13 @@ int parse_commandline(int argc, char *const argv[])
         {"dt-tag",      1, 0, 'd'},
         {"force-v2",    0, 0, '2'},
         {"force-v3",    0, 0, '3'},
-        {"motorola",    0, 0, 'm'},
+        {"motorola",    1, 0, 'm'},
         {"verbose",     0, 0, 'v'},
         {"help",        0, 0, 'h'},
         {0, 0, 0, 0}
     };
 
-    while ((c = getopt_long(argc, argv, "-o:p:s:d:23mvh", long_options, NULL))
+    while ((c = getopt_long(argc, argv, "-o:p:s:d:23m:vh", long_options, NULL))
            != -1) {
         switch (c) {
         case 1:
@@ -179,7 +179,7 @@ int parse_commandline(int argc, char *const argv[])
             version_override = c - '0';
             break;
         case 'm':
-            is_motorola = 1;
+            motorola_version = atoi(optarg);
             break;
         case 'v':
             verbose = 1;
@@ -539,7 +539,7 @@ struct chipInfo_t *getChipInfo(const char *filename, int *num, uint32_t msmversi
                     }
                 }
 
-                if (is_motorola && (pos = strstr(line,QCDT_MODEL_TAG)) != NULL && strstr(line,QCDT_QCOM_MODEL_TAG) == NULL) {
+                if (motorola_version && (pos = strstr(line,QCDT_MODEL_TAG)) != NULL && strstr(line,QCDT_QCOM_MODEL_TAG) == NULL) {
                     char *model_end;
                     int model_len;
 
@@ -576,7 +576,7 @@ struct chipInfo_t *getChipInfo(const char *filename, int *num, uint32_t msmversi
         log_err("... skip, incorrect '%s' format\n", QCDT_PMIC_TAG);
         return NULL;
     }
-    if (is_motorola && model == NULL) {
+    if (motorola_version && model == NULL) {
         log_err("... skip, property '%s' not found\n", QCDT_MODEL_TAG);
         return NULL;
     }
@@ -601,7 +601,7 @@ struct chipInfo_t *getChipInfo(const char *filename, int *num, uint32_t msmversi
                         chip->t_next = tmp;
                     }
 
-                    if (is_motorola) {
+                    if (motorola_version) {
                         memset(tmp->model, 0, sizeof(tmp->model));
                         strncpy(tmp->model, model, strlen(model));
                     }
@@ -637,7 +637,7 @@ struct chipInfo_t *getChipInfo(const char *filename, int *num, uint32_t msmversi
                     chip->t_next = tmp;
                 }
 
-                if (is_motorola) {
+                if (motorola_version) {
                     memset(tmp->model, 0, sizeof(tmp->model));
                     strncpy(tmp->model, model, strlen(model));
                 }
@@ -934,6 +934,7 @@ int main(int argc, char **argv)
     size_t wrote = 0, expected = 0;
     uint32_t dtb_size;
     uint32_t version = 0;
+    uint32_t hdr_version;
     char *filename;
 
     log_info("DTB combiner:\n");
@@ -977,9 +978,6 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    if (is_motorola)
-        version = 259;
-
     if (version_override != 0) {
         version = version_override;
     }
@@ -989,15 +987,17 @@ int main(int argc, char **argv)
     } else if (version == 2) {
         entry_size = 24;
     } else {
-        if (is_motorola)
-            entry_size = 72;
-        else
-            entry_size = 40;
+        entry_size = 40;
     }
+
+    hdr_version = (motorola_version<<8) | version;
+
+    if (motorola_version)
+        entry_size += 32;
 
     /* Write header info */
     wrote += write(out_fd, QCDT_MAGIC, sizeof(uint8_t) * 4); /* magic */
-    wrote += write(out_fd, &version, sizeof(uint32_t));      /* version */
+    wrote += write(out_fd, &hdr_version, sizeof(uint32_t));      /* version */
     wrote += write(out_fd, (uint32_t *)&dtb_count, sizeof(uint32_t));
                                                              /* #DTB */
 
@@ -1044,7 +1044,7 @@ int main(int argc, char **argv)
             expected += chip->master->dtb_size;
         }
         wrote += write(out_fd, &chip->master->dtb_size, sizeof(uint32_t));
-        if (is_motorola)
+        if (motorola_version)
             wrote += write(out_fd, &chip->model, sizeof(chip->model));
     }
 
