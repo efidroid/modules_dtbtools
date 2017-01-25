@@ -361,6 +361,10 @@ int process_dtb(const char *in_dtb, const char *outdir, uint32_t *countp, int re
             printf(", oppoid: %x/%x", dt_entry->u.oppo.id0, dt_entry->u.oppo.id1);
         }
 
+        if (!strcmp(parser_name, "qcom_motorola")) {
+            printf(", mmiversion: %d, mmimodel: %s", dt_entry->u.motorola.version, dt_entry->u.motorola.model);
+        }
+
         printf("\n");
 
         // patch msm-id
