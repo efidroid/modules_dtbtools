@@ -67,12 +67,6 @@ static int has_offset(list_node_t *list, uint32_t offset)
     return 0;
 }
 
-#define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
-#define ROUNDDOWN(a, b) ((a) & ~((b)-1))
-
-#define PAGE_SIZE_DEF  2048
-static int m_page_size = PAGE_SIZE_DEF;
-
 off_t fdsize(int fd)
 {
     off_t off;
@@ -81,43 +75,6 @@ off_t fdsize(int fd)
     lseek(fd, 0L, SEEK_SET);
 
     return off;
-}
-
-/* Returns 0 if the device tree is valid. */
-int dev_tree_validate(dt_table_t *table, unsigned int page_size, uint32_t *dt_hdr_size)
-{
-    int dt_entry_size;
-    uint64_t hdr_size;
-
-    /* Validate the device tree table header */
-    if (table->magic != DEV_TREE_MAGIC) {
-        fprintf(stderr, "Bad magic in device tree table \n");
-        return -1;
-    }
-
-    if (table->version == DEV_TREE_VERSION_V1) {
-        dt_entry_size = sizeof(dt_entry_v1_t);
-    } else if (table->version == DEV_TREE_VERSION_V2) {
-        dt_entry_size = sizeof(dt_entry_v2_t);
-    } else if (table->version == DEV_TREE_VERSION_V3) {
-        dt_entry_size = sizeof(dt_entry_t);
-    } else {
-        fprintf(stderr, "Unsupported version (%d) in DT table \n",
-                table->version);
-        return -1;
-    }
-
-    hdr_size = (uint64_t)table->num_entries * dt_entry_size + DEV_TREE_HEADER_SIZE;
-
-    /* Roundup to page_size. */
-    hdr_size = ROUNDUP(hdr_size, page_size);
-
-    if (hdr_size > UINT_MAX)
-        return -1;
-    else
-        *dt_hdr_size = hdr_size & UINT_MAX;
-
-    return 0;
 }
 
 int dev_tree_extract(const char *directory, size_t filesize, dt_table_t *table)
@@ -130,15 +87,39 @@ int dev_tree_extract(const char *directory, size_t filesize, dt_table_t *table)
     dt_entry_v2_t *dt_entry_v2 = NULL;
     dt_entry_t *cur_dt_entry = NULL;
     list_node_t offlist;
+    uint32_t qcdt_version;
+    uint32_t motorola_version;
+    uint32_t entry_size;
 
     list_initialize(&offlist);
     table_ptr = (unsigned char *)table + DEV_TREE_HEADER_SIZE;
     cur_dt_entry = &dt_entry_buf_1;
 
-    fprintf(stdout, "DTB Total entry: %d, DTB version: %d\n", table->num_entries, table->version);
+    qcdt_version = table->version & 0xff;
+    motorola_version = table->version >> 8;
+    switch (qcdt_version) {
+        case DEV_TREE_VERSION_V1:
+            entry_size =  sizeof(dt_entry_v1_t);
+            break;
+        case DEV_TREE_VERSION_V2:
+            entry_size = sizeof(dt_entry_v2_t);
+            break;
+        case DEV_TREE_VERSION_V3:
+            entry_size = sizeof(dt_entry_t);
+            break;
+        default:
+            fprintf(stderr, "ERROR: Unsupported version (%d) in DT table \n", qcdt_version);
+            return -1;
+    }
+
+    if (motorola_version) {
+        entry_size += 32;
+    }
+
+    fprintf(stdout, "DTB Total entry: %d, DTB version: %d\n", table->num_entries, qcdt_version);
     for (i = 0; i < table->num_entries; i++) {
         memset(cur_dt_entry, 0, sizeof(*cur_dt_entry));
-        switch (table->version) {
+        switch (qcdt_version) {
             case DEV_TREE_VERSION_V1:
                 dt_entry_v1 = (dt_entry_v1_t *)table_ptr;
                 cur_dt_entry->platform_id = dt_entry_v1->platform_id;
@@ -151,7 +132,6 @@ int dev_tree_extract(const char *directory, size_t filesize, dt_table_t *table)
                 cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
                 cur_dt_entry->offset = dt_entry_v1->offset;
                 cur_dt_entry->size = dt_entry_v1->size;
-                table_ptr += sizeof(dt_entry_v1_t);
                 break;
             case DEV_TREE_VERSION_V2:
                 dt_entry_v2 = (dt_entry_v2_t *)table_ptr;
@@ -178,7 +158,6 @@ int dev_tree_extract(const char *directory, size_t filesize, dt_table_t *table)
                 cur_dt_entry->pmic_rev[3] = board_pmic_target(3);*/
                 cur_dt_entry->offset = dt_entry_v2->offset;
                 cur_dt_entry->size = dt_entry_v2->size;
-                table_ptr += sizeof(dt_entry_v2_t);
                 break;
             case DEV_TREE_VERSION_V3:
                 memcpy(cur_dt_entry, (dt_entry_t *)table_ptr,
@@ -196,13 +175,13 @@ int dev_tree_extract(const char *directory, size_t filesize, dt_table_t *table)
                 if (cur_dt_entry->board_hw_subtype == 0)
                     cur_dt_entry->board_hw_subtype = (cur_dt_entry->variant_id >> 0x18);
 
-                table_ptr += sizeof(dt_entry_t);
                 break;
             default:
                 fprintf(stderr, "ERROR: Unsupported version (%d) in DT table \n",
-                        table->version);
+                        qcdt_version);
                 return -1;
         }
+        table_ptr += entry_size;
 
         if (cur_dt_entry->offset > filesize) {
             fprintf(stderr, "ERROR: offset %lx of entry %u is greate than the filesize %lx\n", (uint64_t)cur_dt_entry->offset, i, (uint64_t)filesize);
@@ -303,7 +282,7 @@ int main(int argc, char **argv)
 
     // validate devicetree
     uint32_t dt_hdr_size;
-    rc = dev_tree_validate(dtimg, m_page_size, &dt_hdr_size);
+    rc = libboot_qcdt_validate(dtimg, &dt_hdr_size);
     if (rc) {
         fprintf(stderr, "Cannot validate Device Tree Table \n");
         goto free_buffer;
