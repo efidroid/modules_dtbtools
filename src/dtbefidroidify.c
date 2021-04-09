@@ -667,7 +667,7 @@ int main(int argc, char **argv)
                     break;
                 }
                 strncpy(filename, indir, flen);
-                strncat(filename, "/", 1);
+                strcat(filename, "/");
                 strncat(filename, dp->d_name, flen);
 
                 rc = process_dtb(filename, outdir, &i, remove_unused_nodes, parser);
